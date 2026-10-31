@@ -1,0 +1,8 @@
+cmake_minimum_required(VERSION 3.16)
+project(wall_clock LANGUAGES CXX)
+set(CMAKE_CXX_STANDARD 17)
+enable_testing()
+add_executable(engine_test test/engine_test.cpp)
+target_include_directories(engine_test PRIVATE include)
+target_compile_options(engine_test PRIVATE -Wall -Wextra -Wpedantic)
+add_test(NAME engine COMMAND engine_test)
