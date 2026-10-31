@@ -1,2 +1,149 @@
-# Wall-Clock
-An esp32 led wall clock
+ESP32 LED Ring Wall Clock
+
+A wall clock built around an ESP32 development board and an addressable LED strip arranged in a ring.
+
+The clock represents hours, minutes, and seconds using colored light. Hours and minutes use smooth, phase-shifted brightness modulation; seconds remain at constant high brightness. When indications collide, seconds take priority, while hour and minute colors blend additively when they share an LED without a second indication.
+
+Project status
+
+Phase: Requirements definition
+Implementation: Not yet specified
+
+The system requirements are documented in "SyRS.md". Open decisions are tracked there rather than being silently assumed in the implementation.
+
+Concept
+
+Time indications
+
+- Hours: A traditional 12-position dial. The hour position advances continuously as time progresses.
+- Minutes: One of 60 logical positions, corresponding to the current minute value.
+- Seconds: One of 60 logical positions, corresponding to the current second value.
+
+The number of physical LEDs is not fixed at 60. The mapping from logical time positions to physical LED indices remains to be defined.
+
+Colors
+
+The colors of hour, minute, and second indications are configurable. The hour indication supports separate AM and PM colors, allowing the two halves of the day to be distinguished without changing the 12-position dial.
+
+Unassigned LEDs are off by default. Users can enable idle illumination, with white as the initial default idle color.
+
+Brightness modulation
+
+Hours and minutes use the same low and high brightness levels, with a smooth cosine waveform.
+
+The modulation period is configurable from 3 to 6 seconds, with a default of 4.5 seconds. The minute indication is shifted by half a period relative to the hour indication.
+
+The modulation runs continuously and independently of changes to the displayed time.
+
+Seconds use constant high brightness.
+
+Collision handling
+
+The display uses the following rules:
+
+1. Seconds override everything else. If a second indication shares a physical LED with an hour or minute indication, only the second color is displayed at high brightness.
+2. Hours and minutes blend additively. If they share an LED and no second indication is present, their modulated RGB contributions are added channel by channel.
+3. Unassigned LEDs remain off unless idle illumination is enabled.
+
+Each RGB output channel is limited to the range supported by the selected LED hardware.
+
+Configuration
+
+The planned configurable parameters include:
+
+Parameter| Initial value or constraint
+Physical LED count| To be selected
+Logical minute/second positions| 60
+Hour dial| 12 positions
+Hour AM color| To be defined
+Hour PM color| To be defined
+Minute color| To be defined
+Second color| To be defined
+Idle illumination| Disabled
+Idle color| White
+Modulation period| 4.5 seconds
+Modulation period range| 3–6 seconds
+Low brightness| To be defined
+High brightness| To be defined
+Time source| Network time over Wi-Fi
+Time zone| To be defined
+
+Valid configuration shall persist across power cycles. The precise configuration mechanism and defaults remain subject to the SyRS.
+
+User interaction
+
+The system shall provide both physical controls and a web interface.
+
+The precise functions assigned to each interface remain to be defined. The web interface is intended for local interaction and configuration; its access policy and authentication requirements are open decisions.
+
+Hardware
+
+The initial hardware concept consists of:
+
+- An ESP32 development board.
+- An addressable RGB or RGBW LED strip suitable for circular installation.
+- A suitable LED power supply.
+- Physical controls.
+- A Wi-Fi network for time synchronization.
+
+The exact board, LED type, LED count, power supply, GPIO assignments, and electrical interfaces have not yet been selected.
+
+The implementation must account for LED current requirements, logic-level compatibility, grounding, and the ESP32 board's electrical limits.
+
+Software design principles
+
+The implementation should preserve the separation between:
+
+1. Timekeeping: obtains synchronized time and derives local hour, minute, and second values.
+2. Logical display model: calculates the intended hour, minute, and second positions.
+3. Physical mapping: converts logical positions into physical LED indices.
+4. Modulation: calculates continuous hour and minute brightness values.
+5. Rendering: resolves collisions, computes final RGB values, and updates the LED strip.
+6. Configuration: validates, applies, and persists user settings.
+7. User interfaces: handles physical controls and web interactions.
+
+This separation allows the logical display and collision behavior to be tested independently of the selected LED hardware.
+
+The modulation timebase must remain independent of wall-clock synchronization and LED refresh operations.
+
+Testing
+
+The project should include automated tests for:
+
+- Logical time-to-position mapping.
+- Hour movement between hour marks.
+- LED index bounds.
+- Modulation waveform and period limits.
+- Half-period phase offset.
+- Modulation continuity when displayed time changes.
+- Seconds-over-hours/minutes priority.
+- Additive RGB blending and output limiting.
+- AM/PM color selection.
+- Configuration validation and persistence.
+- Recovery from network and power interruptions.
+- Physical-control and web-interface behavior.
+
+Hardware integration tests will be required to verify actual LED rendering, electrical operation, and perceived display behavior.
+
+Documentation
+
+- "README.md" — project overview, behavior, configuration, architecture, and development status.
+- "SyRS.md" — normative system requirements and verification objectives.
+
+Additional architecture, software requirements, and test specifications should be created as implementation decisions become stable.
+
+Current open decisions
+
+Before implementation acceptance criteria can be finalized, the project needs decisions on:
+
+1. Mapping 60 logical positions to the selected physical LED count.
+2. Ring orientation and physical index direction.
+3. Hour-position quantization.
+4. Timekeeping behavior during Wi-Fi loss and power interruption.
+5. Time-zone configuration.
+6. Physical-control and web-interface functions.
+7. LED hardware and power supply.
+8. Default brightness levels.
+9. Required time accuracy and display update latency.
+
+These decisions should be reflected in "SyRS.md" before they are treated as implementation constraints.
