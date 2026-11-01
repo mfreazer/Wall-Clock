@@ -138,3 +138,54 @@ evidence. No hardware, GPIO or frame-timing measurements, no NVS persistence
 across power loss, no electrical or thermal checks, no wall-clock accuracy or
 drift measurements, no Wi-Fi reconnection behaviour, and no browser testing on
 real devices.
+
+## Addendum: emulator snapshot and cached smoke test (`46cd602`)
+
+Reviewed the three follow-up commits that add an isolated sandbox build, an
+emulator smoke test, and a Git-stored emulator-only image. Posted as review
+`5730847455` with four inline comments. Verdict: verified, no blocking findings.
+
+Independently confirmed:
+
+- `./tools/sandbox_esp32_cached_smoke.sh` runs green here in about 7 s: input
+  verification, pinned npm fetch, chrooted emulator, provisioning prompt and
+  invalid-credential rejection observed, exit 0, no compiler fetch or rebuild.
+- The SHA-512 pin in the script base64-encodes to exactly the registry's
+  `dist.integrity` for `esp32-emu@1.2.0`, so it identifies the published tarball.
+- Every `inputs_sha256` entry matches `git show 7b451b6:<path>` and the current
+  head, so the image corresponds to committed source; all four image hashes match.
+- Images carry valid ESP32 image magic; the partition table is the stock 4 MB
+  layout and agrees with the flash offsets in the smoke script.
+- The binary contains the firmware's own strings (`Provision: WIFI ...`, the
+  exact invalid-credential message, `configurationNeedsRepair`), and its embedded
+  app descriptor reports IDF `v4.4.7`, matching the pinned framework.
+- No NVS image is committed, so no credentials can be pre-provisioned; string
+  scanning finds only error templates.
+- Guard behaviour beyond the five shipped tests: an added `lib/` directory, a
+  whitespace-only `platformio.ini` edit, a deleted source file, a one-byte image
+  truncation and a symlinked input were each rejected; a missing artifact
+  directory, missing manifest or stale source each exit 1.
+- `create` refuses uncommitted inputs and a retained build without a passing log.
+- `python3 test/sandbox_artifact_test.py -v`: 5 tests pass in 0.25 s.
+
+Notes raised, none blocking:
+
+1. `docs/Sandbox-ESP32.md` should record the expected app descriptor. It reads
+   `arduino-lib-builder` / `Mar 5 2024` / `v4.4.7-dirty`, inherited from the
+   prebuilt SDK; a future provenance check will otherwise misread it.
+2. The staleness guard hashes the build recipe but not
+   `tools/sandbox_esp32_smoke.mjs`. Weakening the smoke assertions leaves the
+   snapshot verifiable. Cheap fix: add the file to `inputs_sha256`.
+3. `test/sandbox_artifact_test.py` is not run by anything. Registering it in PR
+   CI would block every firmware change, so either run it on `main` only or state
+   the rule that a snapshot is refreshed **or deleted** in the same PR.
+4. With `--keep`, a run that fails before emulation still prints
+   `Smoke log retained: .../emulator.log` for a file that does not exist.
+
+The two blocking items from the review above are unaffected: `ci.yml` still
+builds without an ArduinoJson path, so `firmware_host` never runs there, and the
+two workflows still disagree about coverage.
+
+Merge-order caveat: the snapshot is valid only for the current build inputs. If
+the firmware changes again before merge, refresh the snapshot in that same PR or
+delete it — do not leave an 868 KiB image that the runner will refuse.
