@@ -1,0 +1,57 @@
+# Optional CMake glue for the host-side verification.
+#
+# The canonical runner is run_host_tests.sh, which needs only a compiler (plus
+# Node for the UI contract test). This file exists so the same checks can join
+# the project's normal CTest gate:
+#
+#     # top-level CMakeLists.txt
+#     add_subdirectory(test/host)
+#
+# Every target is created only when its inputs exist, so this directory is
+# harmless on a branch that does not carry the firmware yet.
+#
+# For the firmware harness, point WALLCLOCK_ARDUINOJSON_DIR at an ArduinoJson
+# source tree (the directory containing ArduinoJson.h), e.g.
+#
+#     cmake -S . -B build \
+#       -DWALLCLOCK_ARDUINOJSON_DIR=$PWD/.deps/ArduinoJson/src
+
+get_filename_component(WALLCLOCK_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/../.." ABSOLUTE)
+
+set(WALLCLOCK_HOST_FLAGS -Wall -Wextra)
+set(WALLCLOCK_SANITIZER_FLAGS "")
+option(WALLCLOCK_SANITIZERS "Build host tests with ASan/UBSan" OFF)
+if(WALLCLOCK_SANITIZERS)
+  set(WALLCLOCK_SANITIZER_FLAGS -fsanitize=address,undefined -fno-omit-frame-pointer)
+endif()
+
+# --- engine property suite -------------------------------------------------
+if(EXISTS "${WALLCLOCK_ROOT}/include/clock_engine.h")
+  add_executable(engine_properties_test engine_properties.cpp)
+  target_include_directories(engine_properties_test PRIVATE "${WALLCLOCK_ROOT}/include")
+  target_compile_options(engine_properties_test PRIVATE ${WALLCLOCK_HOST_FLAGS} ${WALLCLOCK_SANITIZER_FLAGS})
+  target_link_options(engine_properties_test PRIVATE ${WALLCLOCK_SANITIZER_FLAGS})
+  add_test(NAME engine_properties COMMAND engine_properties_test)
+endif()
+
+# --- firmware integration harness -----------------------------------------
+if(EXISTS "${WALLCLOCK_ROOT}/src/main.cpp" AND WALLCLOCK_ARDUINOJSON_DIR)
+  add_executable(firmware_host_harness firmware_harness.cpp stubs/host_stubs.cpp)
+  target_include_directories(firmware_host_harness PRIVATE
+    "${CMAKE_CURRENT_SOURCE_DIR}/stubs"
+    "${WALLCLOCK_ROOT}/include"
+    "${WALLCLOCK_ARDUINOJSON_DIR}")
+  set_target_properties(firmware_host_harness PROPERTIES CXX_STANDARD 17 CXX_EXTENSIONS ON)
+  target_compile_options(firmware_host_harness PRIVATE ${WALLCLOCK_HOST_FLAGS} ${WALLCLOCK_SANITIZER_FLAGS})
+  target_link_options(firmware_host_harness PRIVATE ${WALLCLOCK_SANITIZER_FLAGS})
+  add_test(NAME firmware_host COMMAND firmware_host_harness)
+elseif(EXISTS "${WALLCLOCK_ROOT}/src/main.cpp")
+  message(STATUS "firmware_host_harness skipped: set WALLCLOCK_ARDUINOJSON_DIR to build it")
+endif()
+
+# --- browser UI contract ---------------------------------------------------
+find_program(WALLCLOCK_NODE NAMES node nodejs)
+if(WALLCLOCK_NODE AND EXISTS "${WALLCLOCK_ROOT}/include/web_ui.h")
+  add_test(NAME ui_contract
+           COMMAND "${WALLCLOCK_NODE}" "${CMAKE_CURRENT_SOURCE_DIR}/ui_contract_test.mjs" --root "${WALLCLOCK_ROOT}")
+endif()

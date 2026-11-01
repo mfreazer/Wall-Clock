@@ -183,3 +183,45 @@ The one overstated claim is structural rather than factual: the PR body's "Requi
 Merge after P1-1 (a 6-line `CMakeLists.txt` change), ideally with P1-2 and P2-3/P2-4. Everything else can follow. The engine itself is in good shape: it survived bounds, monotonicity, phase-continuity, saturation and frame-size property tests that go well beyond the PR's own suite, and the firmware's HTTP/config contract behaved correctly under 3 605 host-side assertions including 25 rejection cases.
 
 If useful, I can contribute the harness used for this review — host stubs + real ArduinoJson wiring, the firmware integration harness, the property tests, and the DOM-shim UI test — as a follow-up PR, so that "firmware logic verified without hardware" becomes reproducible instead of a one-off.
+
+---
+
+## Addendum — host verification harness (contributed)
+
+`test/host/` now carries the harness used for this review, so the evidence above
+can be re-run instead of taken on trust:
+
+```sh
+test/host/run_host_tests.sh                    # skips what this branch lacks, exits 0/1
+test/host/run_host_tests.sh --require-firmware # what CI uses once src/main.cpp exists
+```
+
+It needs only a C++17 compiler; Node adds the UI contract test, and ASan/UBSan
+are picked up automatically when available. `.github/workflows/native.yml` runs
+it on every push and pull request, alongside the project's own CMake/CTest gate
+(Release, then Debug with sanitizers).
+
+| Step | Covers |
+|---|---|
+| native tests (`test/*.cpp`) | the project's own suite, compiled directly in default and `-DNDEBUG` modes |
+| `engine_properties.cpp` | bounded indices for every geometry, monotone dial mapping, distinct minute positions, brightness bounds, half-period complement, phase continuity, saturating blending, validation ranges |
+| `firmware_harness.cpp` | `src/main.cpp` unmodified against host shims + real ArduinoJson: routes, config round-trip, 25 rejection cases, NVS failure/fallback, cold boot, cadence, pixel semantics, index bounds, button, serial |
+| `ui_contract_test.mjs` | the real HTML/JS from `include/web_ui.h`, including the exact POST body, which is then fed back into the firmware harness |
+
+Status of the harness itself:
+
+* Verified against the firmware at `c9b3605` (PR #1 head): 4 native runs, the
+  property suite (78 M checks), 331 firmware checks and 45 UI checks all pass,
+  with sanitizers and no compiler warnings.
+* Verified that it fails when it should: injecting *apply-before-save* (a
+  firmware-only regression) and *seconds lose priority* (an engine regression)
+  turns the run red — the first is caught by nothing else in the repository, and
+  the second is caught by the harness while `engine_test` under `NDEBUG` still
+  reports success, which is the P1-1 finding made visible.
+* Wired into CTest via `add_subdirectory(test/host)` (4 registered tests,
+  verified) or run standalone.
+
+It still cannot replace an ESP32 build or hardware testing: no xtensa
+compilation, no newlib `TZ` behaviour, no real heap, no RMT/WS2812 timing, no
+electrical verification. P1-1 (the CTest gate) and the ESP32 build remain open
+until they are exercised on the revised firmware.
