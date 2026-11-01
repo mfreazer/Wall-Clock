@@ -6,10 +6,10 @@ The clock represents hours, minutes, and seconds using colored light. Hours and 
 
 Project status
 
-Phase: Requirements definition
-Implementation: Not yet specified
+Phase: Development implementation
+Implementation: Portable C++ clock engine, ESP32 Arduino firmware, local configuration UI, and native engine tests. Hardware acceptance is pending.
 
-The system requirements are documented in "SyRS.md". Open decisions are tracked there rather than being silently assumed in the implementation.
+The system requirements are documented in [docs/SyRS.md](docs/SyRS.md). Provisional development decisions, defaults, limitations and verification status are recorded in [docs/Implementation.md](docs/Implementation.md); they are not silently promoted to approved requirements.
 
 Concept
 
@@ -147,3 +147,42 @@ Before implementation acceptance criteria can be finalized, the project needs de
 9. Required time accuracy and display update latency.
 
 These decisions should be reflected in "SyRS.md" before they are treated as implementation constraints.
+
+
+## Build and run
+
+Install [PlatformIO](https://platformio.org/) and run:
+
+```sh
+pio run -e esp32
+pio run -e esp32 -t upload
+pio device monitor -b 115200
+```
+
+Read the hardware and safety profile in [docs/Implementation.md](docs/Implementation.md) before connecting a strip. The default data pin is GPIO18, and the optional active-low button is GPIO27 to ground.
+
+At the serial prompt send `WIFI <ssid><TAB><password>` followed by Enter (replace `<TAB>` with a literal tab). Credentials persist in NVS. After joining the network, the clock prints its IP every 30 seconds. Open `http://<printed-ip>/` from the same trusted LAN to configure the ring. Before network time is available, the LEDs remain off. There is no setup access point or cloud dependency beyond network time.
+
+## Native tests (no ESP32 needed)
+
+```sh
+# Install Node.js to include the embedded web UI test in CTest.
+cmake -S . -B build
+cmake --build build
+ctest --test-dir build --output-on-failure
+```
+
+Or, with only a C++17 compiler:
+
+```sh
+g++ -std=c++17 -Wall -Wextra -Wpedantic -Iinclude test/engine_test.cpp -o /tmp/wallclock-engine
+/tmp/wallclock-engine
+g++ -std=c++17 -Wall -Wextra -Wpedantic -Iinclude test/requirements_test.cpp -o /tmp/wallclock-requirements
+/tmp/wallclock-requirements
+```
+
+With Node.js installed, CTest also runs `test/web_ui_test.js`. If Node.js is missing, CMake reports that the UI test was not registered. The C++ and UI tests are host-only and are not run by `pio test -e esp32`.
+
+Source layout: `include/clock_engine.h` contains hardware-independent geometry, modulation, validation and rendering; `src/main.cpp` handles SNTP, NVS, HTTP, controls and NeoPixel output; `include/web_ui.h` is the self-contained local UI. No credentials should be committed.
+
+Review findings and outstanding risks are recorded in [docs/Review.md](docs/Review.md).
