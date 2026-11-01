@@ -41,4 +41,4 @@ Use an appropriately rated external regulated 5 V supply, common ground, a suita
 
 The QA host suite exercises real ArduinoJson with stubbed HTTP, NVS, SNTP, GPIO, serial and LED drivers; it includes simulated failures and tests the browser's POST body against the firmware. See [test/host/README.md](../test/host/README.md). It is not target or hardware evidence.
 
-Not yet verified on the ESP32: compilation, real NVS and interrupted writes, network outage/reconnection, actual button, browser/HTTP integration, electrical safety, refresh latency, time accuracy and perceived modulation. Do not interpret passing host tests as hardware acceptance.
+The ESP32 target compiled and passed a limited emulator boot/serial smoke test using a third-party compiler whose official provenance is unverified; see [Sandbox-ESP32.md](Sandbox-ESP32.md). A verified-toolchain rebuild is still required. Not yet verified on physical ESP32 hardware: real NVS and interrupted writes, network outage/reconnection, actual button, browser/HTTP integration, electrical safety, refresh latency, time accuracy and perceived modulation. Do not interpret passing host tests as hardware acceptance.

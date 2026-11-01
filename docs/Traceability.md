@@ -117,7 +117,7 @@ g++ -std=c++17 -Wall -Wextra -Wpedantic -Iinclude test/timezone_test.cpp -o /tmp
 /tmp/wallclock-timezone
 ```
 
-Both binaries pass via CMake/CTest in Debug and Release in the review sandbox. R emits five named group results; individual checks fail with descriptive messages and a nonzero exit code. A passing group is not a count of separately implemented SyRS tests. CMake registers L, R, the time-zone tests and the available H tests. The required host runner passed against the revision with real ArduinoJson and stubs; see H for coverage and limitations. ESP32 firmware has not been compiled in this environment: PlatformIO could not download the platform package. No target HTTP, browser, NVS, Wi-Fi, hardware, accuracy, latency or power-interruption tests were executed.
+All three binaries pass via CMake/CTest in Debug and Release in the review sandbox. R emits five named group results; individual checks fail with descriptive messages and a nonzero exit code. A passing group is not a count of separately implemented SyRS tests. CMake registers L, R, the time-zone tests and the available H tests. The required host runner passed against the revision with real ArduinoJson and stubs; see H for coverage and limitations. The ESP32 target also compiled and passed a limited emulator boot and serial validation smoke test using an unverified third-party compiler; see [Sandbox-ESP32.md](Sandbox-ESP32.md). This is not an official-toolchain verification or hardware acceptance. No target HTTP, browser, real NVS, Wi-Fi, hardware, accuracy, latency or power-interruption tests were executed.
 
 ## Acceptance gaps and change discipline
 
