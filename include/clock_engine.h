@@ -4,6 +4,7 @@
 #include <cstdint>
 #include <string>
 #include <vector>
+#include "timezone_rule.h"
 
 namespace wallclock {
 struct Color { uint8_t r=0, g=0, b=0; };
@@ -18,8 +19,7 @@ inline bool valid(const Config& c) {
   return c.count>=1 && c.count<=300 && c.offset>=0 && c.offset<c.count &&
     std::isfinite(c.period) && c.period>=3 && c.period<=6 &&
     std::isfinite(c.low) && std::isfinite(c.high) && c.low>=0 && c.low<c.high && c.high<=100 &&
-    !c.timezone.empty() && c.timezone.size()<=96 &&
-    std::none_of(c.timezone.begin(), c.timezone.end(), [](unsigned char ch) { return ch < 0x20 || ch == 0x7f; });
+    validTimezone(c.timezone);
 }
 struct Time { int hour, minute, second; double fraction=0; };
 inline double hourPosition(Time t) { return (t.hour%12)*5.0+t.minute/12.0+(t.second+t.fraction)/720.0; }

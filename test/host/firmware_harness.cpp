@@ -82,6 +82,7 @@ static void coldBoot() {
   oscillator = Oscillator();
   strip.reset();
   timeAcquired.store(false);
+  configurationNeedsRepair=false;
   revisionCounter=0;
   serialOverflow=false;
   server.routes.clear();
@@ -354,6 +355,12 @@ static void scenario_rejections() {
     p = base;
     p.timezone = "";
     expect400(p.json(), "empty timezone");
+    p.timezone = "Not/A/Zone";
+    expect400(p.json(), "IANA-shaped invalid timezone");
+    p.timezone = "UTC0\\u0000BAD";
+    expect400(p.json(), "embedded NUL in timezone");
+    p.timezone = "EST5EDT,M3.6.0/2,M11.1.0/2";
+    expect400(p.json(), "invalid timezone transition");
   }
   {
     Payload p = base;
@@ -462,8 +469,43 @@ static void scenario_persistence() {
   // Corrupt NVS must fall back to defaults rather than to garbage/partial state.
   prefs.store.kv["config"] = "{\"count\":96}";
   coldBoot();
-  checkEq(config.count, 60, "corrupt persisted configuration falls back to defaults");
+  checkEq(config.count, 60, "corrupt persisted configuration loads recovery defaults");
+  CHECK(configurationNeedsRepair);
   checkEq((long long)(config.period * 10), 45, "defaults restored after corrupt NVS");
+}
+
+static void scenario_invalid_timezone_recovery() {
+  prefs.store.kv.clear();
+  Payload bad; bad.timezone="Not/A/Zone";
+  prefs.store.kv["config"]=bad.json();
+  fakeEpoch=1793448000; coldBoot(); hostTimeSync();
+  CHECK(configurationNeedsRepair);
+  const std::string original=prefs.store.kv["config"];
+  JsonDocument status;
+  CHECK(!deserializeJson(status,httpGet("/api/status").body.c_str()));
+  CHECK(status["configurationNeedsRepair"].as<bool>());
+  Adafruit_NeoPixel::reset(); advance(100);
+  bool dark=true;
+  for(const auto& frame:Adafruit_NeoPixel::frames) for(uint8_t pixel:frame) dark &= pixel==0;
+  CHECK(dark);
+  hostSetPin(BUTTON_PIN,LOW); advance(100); hostSetPin(BUTTON_PIN,HIGH); advance(100);
+  CHECK(configurationNeedsRepair && prefs.store.kv["config"]==original);
+  Preferences::failWrites=true;
+  checkEq(httpPostConfig(Payload{}.json()).code,500,"failed repair remains disabled");
+  Preferences::failWrites=false;
+  CHECK(configurationNeedsRepair && prefs.store.kv["config"]==original);
+  checkEq(httpPostConfig(Payload{}.json()).code,200,"valid configuration repairs stored fault");
+  CHECK(!configurationNeedsRepair);
+  Adafruit_NeoPixel::reset(); advance(50);
+  bool lit=false; for(const auto& frame:Adafruit_NeoPixel::frames) for(uint8_t pixel:frame) lit |= pixel!=0;
+  CHECK(lit);
+  coldBoot(); CHECK(!configurationNeedsRepair);
+  prefs.store.kv["config"]=""; coldBoot(); CHECK(configurationNeedsRepair);
+  prefs.store.kv.clear(); Preferences::failBegin=true; coldBoot();
+  CHECK(configurationNeedsRepair);
+  checkEq(httpPostConfig(Payload{}.json()).code,500,"unavailable NVS cannot complete recovery");
+  CHECK(configurationNeedsRepair);
+  Preferences::failBegin=false;
 }
 
 static void scenario_display() {
@@ -653,6 +695,7 @@ int main(int argc, char** argv) {
       {"conditional updates and allocation failures", scenario_concurrency_and_allocation},
       {"SNTP synchronization status", scenario_sync_status},
       {"persistence, cold boot and corrupt NVS", scenario_persistence},
+      {"invalid stored timezone recovery", scenario_invalid_timezone_recovery},
       {"LED output, cadence and bounds", scenario_display},
       {"physical button", scenario_button},
       {"serial provisioning", scenario_serial},

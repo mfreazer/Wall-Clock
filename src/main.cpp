@@ -41,6 +41,7 @@ uint32_t buttonChanged=0;
 bool rawButton=false, stableButton=false;
 String serialLine;
 bool serialOverflow=false;
+bool configurationNeedsRepair=false;
 
 void encode(JsonDocument& d,const Config& c) {
  d["count"]=c.count;d["offset"]=c.offset;d["clockwise"]=c.clockwise;d["idle"]=c.idle;
@@ -86,8 +87,15 @@ bool wifiCredentials(const String& text, String& ssid, String& pass) {
  return ssid.length()>0 && ssid.length()<=32 && pass.length()<=63 && (pass.length()==0 || pass.length()>=8);
 }
 void setup() {
- Serial.begin(115200);pinMode(BUTTON_PIN,INPUT_PULLUP);prefs.begin("wallclock",false);
- Config loaded;if(decode(prefs.getString("config",""),loaded))config=loaded;
+ Serial.begin(115200);pinMode(BUTTON_PIN,INPUT_PULLUP);
+ bool preferencesReady=prefs.begin("wallclock",false);
+ Config loaded;
+ if(!preferencesReady) configurationNeedsRepair=true;
+ else if(prefs.isKey("config")) {
+  if(decode(prefs.getString("config",""),loaded)) config=loaded;
+  else configurationNeedsRepair=true;
+ }
+ if(configurationNeedsRepair) Serial.println("Stored configuration invalid or unavailable; display disabled until settings are saved");
  auto initialStrip=prepareStrip(config);
  if(initialStrip) applyStripConfiguration(config,std::move(initialStrip));
  else Serial.println("LED buffer allocation failed; display unavailable");
@@ -102,7 +110,7 @@ void setup() {
  configTzTime(config.timezone.c_str(),"pool.ntp.org","time.nist.gov");
  server.on("/",HTTP_GET,[]{server.send_P(200,"text/html",WEB_UI);});
  server.on("/api/config",HTTP_GET,[]{JsonDocument d;encode(d,config);String text;serializeJson(d,text);server.sendHeader("ETag",configRevision());server.send(200,"application/json",text);});
- server.on("/api/status",HTTP_GET,[]{JsonDocument d;d["connected"]=WiFi.status()==WL_CONNECTED;d["synchronized"]=timeAcquired.load() && time(nullptr)>1700000000;String text;serializeJson(d,text);server.send(200,"application/json",text);});
+ server.on("/api/status",HTTP_GET,[]{JsonDocument d;d["connected"]=WiFi.status()==WL_CONNECTED;d["configurationNeedsRepair"]=configurationNeedsRepair;d["synchronized"]=timeAcquired.load() && time(nullptr)>1700000000;String text;serializeJson(d,text);server.send(200,"application/json",text);});
  server.on("/api/config",HTTP_POST,[]{
   // JSON-only writes block ordinary cross-origin forms, not untrusted clients
   // or DNS rebinding. This endpoint is not authenticated.
@@ -113,7 +121,7 @@ void setup() {
   if(server.arg("plain").length()>2048){server.send(413,"text/plain","Too large");return;}
   if(!server.hasHeader("If-Match")){server.send(428,"text/plain","Reload settings before saving");return;}
   if(server.header("If-Match")!=configRevision()){server.send(412,"text/plain","Settings changed; reload before saving");return;}
-  Config candidate;if(!decode(server.arg("plain"),candidate)){server.send(400,"text/plain","Invalid settings: check bounds, colors, and low < high");return;}
+  Config candidate;if(!decode(server.arg("plain"),candidate)){server.send(400,"text/plain","Invalid settings: check bounds, colors, brightness, and supported POSIX time zone rule");return;}
   std::unique_ptr<Adafruit_NeoPixel> next;
   if(!strip || candidate.count!=config.count) {
    next=prepareStrip(candidate);
@@ -122,6 +130,7 @@ void setup() {
   if(!save(candidate)){server.send(500,"text/plain","Persistence failed");return;}
   if(next) applyStripConfiguration(candidate,std::move(next));
   else { config=candidate; setenv("TZ",config.timezone.c_str(),1); tzset(); }
+  configurationNeedsRepair=false;
   bumpRevision();server.sendHeader("ETag",configRevision());server.send(200,"application/json","{\"saved\":true}");
  });
  const char* headers[]={"Content-Type","If-Match"};server.collectHeaders(headers,2);server.begin();
@@ -144,9 +153,9 @@ void loop() {
  }
  bool pressed=digitalRead(BUTTON_PIN)==LOW;
  if(pressed!=rawButton){rawButton=pressed;buttonChanged=millis();}
- if(millis()-buttonChanged>=40 && stableButton!=rawButton){stableButton=rawButton;if(stableButton){Config next=config;next.idle=!next.idle;if(save(next)){config=next;bumpRevision();}}}
+ if(millis()-buttonChanged>=40 && stableButton!=rawButton){stableButton=rawButton;if(stableButton && !configurationNeedsRepair){Config next=config;next.idle=!next.idle;if(save(next)){config=next;bumpRevision();}}}
  if(strip && now-lastFrame>=20000){lastFrame=now;timeval wallTime;gettimeofday(&wallTime,nullptr);time_t epoch=wallTime.tv_sec;
-  if(timeAcquired.load() && epoch>1700000000){tm local;localtime_r(&epoch,&local);renderEach({local.tm_hour,local.tm_min,local.tm_sec,wallTime.tv_usec/1000000.0},config,oscillator,[](int i,Color pixel){strip->setPixelColor(i,pixel.r,pixel.g,pixel.b);});}
+  if(!configurationNeedsRepair && timeAcquired.load() && epoch>1700000000){tm local;localtime_r(&epoch,&local);renderEach({local.tm_hour,local.tm_min,local.tm_sec,wallTime.tv_usec/1000000.0},config,oscillator,[](int i,Color pixel){strip->setPixelColor(i,pixel.r,pixel.g,pixel.b);});}
   else { strip->clear(); }
   strip->show();
  }

@@ -19,6 +19,7 @@ std::vector<std::vector<uint8_t>> Adafruit_NeoPixel::frames;
 long Adafruit_NeoPixel::shows = 0;
 
 bool Preferences::failWrites = false;
+bool Preferences::failBegin = false;
 
 int64_t fakeUs = 1000000;
 time_t fakeEpoch = 0;

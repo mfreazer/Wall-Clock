@@ -179,6 +179,8 @@ g++ -std=c++17 -Wall -Wextra -Wpedantic -Iinclude test/engine_test.cpp -o /tmp/w
 /tmp/wallclock-engine
 g++ -std=c++17 -Wall -Wextra -Wpedantic -Iinclude test/requirements_test.cpp -o /tmp/wallclock-requirements
 /tmp/wallclock-requirements
+g++ -std=c++17 -Wall -Wextra -Wpedantic -Iinclude test/timezone_test.cpp -o /tmp/wallclock-timezone
+/tmp/wallclock-timezone
 ```
 
 For the full QA suite, run `test/host/run_host_tests.sh --require-firmware`; see [test/host/README.md](test/host/README.md) for dependencies and CTest integration. With Node.js installed, CTest also runs `test/web_ui_test.js`. If Node.js is missing, CMake reports that the UI test was not registered. The C++ and UI tests are host-only and are not run by `pio test -e esp32`.
