@@ -37,12 +37,13 @@ endif()
 # --- firmware integration harness -----------------------------------------
 if(EXISTS "${WALLCLOCK_ROOT}/src/main.cpp" AND WALLCLOCK_ARDUINOJSON_DIR)
   add_executable(firmware_host_harness firmware_harness.cpp stubs/host_stubs.cpp)
+  target_compile_definitions(firmware_host_harness PRIVATE ARDUINOJSON_ENABLE_ARDUINO_STRING=1)
   target_include_directories(firmware_host_harness PRIVATE
     "${CMAKE_CURRENT_SOURCE_DIR}/stubs"
-    "${WALLCLOCK_ROOT}/include"
-    "${WALLCLOCK_ARDUINOJSON_DIR}")
+    "${WALLCLOCK_ROOT}/include")
+  target_include_directories(firmware_host_harness SYSTEM PRIVATE "${WALLCLOCK_ARDUINOJSON_DIR}")
   set_target_properties(firmware_host_harness PROPERTIES CXX_STANDARD 17 CXX_EXTENSIONS ON)
-  target_compile_options(firmware_host_harness PRIVATE ${WALLCLOCK_HOST_FLAGS} ${WALLCLOCK_SANITIZER_FLAGS})
+  target_compile_options(firmware_host_harness PRIVATE ${WALLCLOCK_HOST_FLAGS} -O0 ${WALLCLOCK_SANITIZER_FLAGS})
   target_link_options(firmware_host_harness PRIVATE ${WALLCLOCK_SANITIZER_FLAGS})
   add_test(NAME firmware_host COMMAND firmware_host_harness)
 elseif(EXISTS "${WALLCLOCK_ROOT}/src/main.cpp")

@@ -17,3 +17,6 @@ if(NODE_EXECUTABLE)
 else()
   message(STATUS "Node.js not found: embedded web UI test will not be registered")
 endif()
+
+# Additional property, firmware-stub and UI contract tests.
+add_subdirectory(test/host)

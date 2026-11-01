@@ -87,6 +87,7 @@ class Element {
     this.textContent = '';
     this.innerHTML = '';
   }
+  addEventListener(event, fn) { this[event] = fn; }
   append(child) {
     this.children.push(child);
   }
@@ -98,6 +99,9 @@ class Element {
 const form = new Element('form');
 const status = new Element('p');
 const colors = new Element('div');
+const message = new Element('p');
+const save = new Element('button');
+const reload = new Element('button');
 
 // Inputs that exist in the served markup (parsed, not hard-coded).
 for (const match of html.matchAll(/<input\s+([^>]*?)\/?>/g)) {
@@ -116,7 +120,7 @@ form.elements = new Proxy(
 form.querySelectorAll = (selector) => (selector === 'input' ? allInputs() : []);
 
 const document = {
-  querySelector: (selector) => (selector === 'form' ? form : selector === '#status' ? status : selector === '#colors' ? colors : null),
+  querySelector: (selector) => (selector === 'form' ? form : selector === '#status' ? status : selector === '#colors' ? colors : selector === '#message' ? message : selector === '#save' ? save : selector === '#reload' ? reload : null),
   createElement: (tag) => new Element(tag),
 };
 
@@ -133,13 +137,16 @@ const serverConfig = configPath
 
 let submitted = null;
 let submittedType = null;
+let submittedRevision = null;
+let revision = '"test-0"';
+const headers = {get: (name) => name.toLowerCase() === 'etag' ? revision : null};
 let statusResponse = { connected: false, synchronized: true };
 let saveResponse = { ok: true, code: 200, text: '{"saved":true}' };
 
 const fetchStub = async (url, options = {}) => {
   const method = options.method || 'GET';
   if (url === '/api/config' && method === 'GET') {
-    return { ok: true, status: 200, json: async () => serverConfig, text: async () => JSON.stringify(serverConfig) };
+    return { ok: true, status: 200, headers, json: async () => serverConfig, text: async () => JSON.stringify(serverConfig) };
   }
   if (url === '/api/status') {
     return { ok: true, status: 200, json: async () => statusResponse, text: async () => JSON.stringify(statusResponse) };
@@ -147,7 +154,8 @@ const fetchStub = async (url, options = {}) => {
   if (url === '/api/config' && method === 'POST') {
     submitted = options.body;
     submittedType = (options.headers || {})['Content-Type'];
-    return { ok: saveResponse.ok, status: saveResponse.code, json: async () => ({}), text: async () => saveResponse.text };
+    submittedRevision = (options.headers || {})['If-Match'];
+    return { ok: saveResponse.ok, status: saveResponse.code, headers, json: async () => ({}), text: async () => saveResponse.text };
   }
   throw new Error(`unexpected request: ${method} ${url}`);
 };
@@ -155,7 +163,7 @@ const fetchStub = async (url, options = {}) => {
 // ---------------------------------------------------------------------------
 // Run the page script
 // ---------------------------------------------------------------------------
-const run = new Function('document', 'fetch', 'setInterval', `${script}\n;return {form, status};`);
+const run = new Function('document', 'fetch', 'setInterval', `${script}\n;return {form, status, message};`);
 const page = run(document, fetchStub, () => 0);
 await new Promise((resolve) => setTimeout(resolve, 25)); // let refresh() settle
 
@@ -187,6 +195,7 @@ await page.form.onsubmit({ preventDefault() {} });
 
 check(submitted !== null, 'submit issues a POST to /api/config');
 check(submittedType === 'application/json', 'submit uses Content-Type: application/json');
+check(submittedRevision === revision, 'submit uses current If-Match revision');
 if (submitted) {
   let body = null;
   try {
@@ -220,8 +229,8 @@ if (submitted) {
 // 3. A rejected save is surfaced to the user, without injecting markup.
 saveResponse = { ok: false, code: 400, text: '<img src=x onerror=alert(1)>Invalid settings' };
 await page.form.onsubmit({ preventDefault() {} });
-check(page.status.textContent.includes('Invalid settings'), 'rejection text is shown to the user');
-check(!page.status.innerHTML, 'rejection text is not written as HTML');
+check(page.message.textContent.includes('Invalid settings'), 'rejection text is shown to the user');
+check(!page.message.innerHTML, 'rejection text is not written as HTML');
 
 // 4. The page must not build markup from server or user data.
 check(!/innerHTML\s*=/.test(script), 'UI does not assign innerHTML');

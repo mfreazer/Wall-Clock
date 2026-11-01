@@ -38,5 +38,5 @@ form.onsubmit=async e=>{
   revision=tag;message.textContent='Settings saved';
  }catch(e){message.textContent=e.message}finally{save.disabled=stale}
 };
-refresh();setInterval(poll,10000);
+refresh();poll();setInterval(poll,10000);
 </script></html>)HTML";

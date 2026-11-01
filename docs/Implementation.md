@@ -35,4 +35,6 @@ Use an appropriately rated external regulated 5 V supply, common ground, a suita
 
 `test/engine_test.cpp` and `test/requirements_test.cpp` check arbitrary-count bounds, direction, mapping endpoints, fractional hour movement, waveform extrema and phase offset at all three specified periods, collision precedence, additive clipping, AM/PM selection, idle output, basic validation and phase independence. Run with CMake/CTest or the compiler command in README.
 
-Not yet verified: ESP32 compilation, NVS persistence and interrupted writes, network outage/reconnection, button behavior, web request integration, electrical safety, actual refresh latency, time accuracy and perceived modulation. Browser interactions and JSON persistence need integration tests. Do not interpret passing native tests as hardware acceptance.
+The QA host suite exercises real ArduinoJson with stubbed HTTP, NVS, SNTP, GPIO, serial and LED drivers; it includes simulated failures and tests the browser's POST body against the firmware. See [test/host/README.md](../test/host/README.md). It is not target or hardware evidence.
+
+Not yet verified on the ESP32: compilation, real NVS and interrupted writes, network outage/reconnection, actual button, browser/HTTP integration, electrical safety, refresh latency, time accuracy and perceived modulation. Do not interpret passing host tests as hardware acceptance.

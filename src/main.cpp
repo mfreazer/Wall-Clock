@@ -69,7 +69,7 @@ std::unique_ptr<Adafruit_NeoPixel> prepareStrip(const Config& c) {
  if (!next || !next->getPixels() || next->numPixels()!=c.count) return nullptr;
  return next;
 }
-void apply(const Config& c, std::unique_ptr<Adafruit_NeoPixel> next) {
+void applyStripConfiguration(const Config& c, std::unique_ptr<Adafruit_NeoPixel> next) {
  if (strip) { strip->clear(); strip->show(); }
  // Destroy the old driver before begin(): its destructor resets the output pin.
  strip.reset();
@@ -89,7 +89,7 @@ void setup() {
  Serial.begin(115200);pinMode(BUTTON_PIN,INPUT_PULLUP);prefs.begin("wallclock",false);
  Config loaded;if(decode(prefs.getString("config",""),loaded))config=loaded;
  auto initialStrip=prepareStrip(config);
- if(initialStrip) apply(config,std::move(initialStrip));
+ if(initialStrip) applyStripConfiguration(config,std::move(initialStrip));
  else Serial.println("LED buffer allocation failed; display unavailable");
  WiFi.mode(WIFI_STA);WiFi.setAutoReconnect(true);
  revisionEpoch=String(esp_random(),HEX)+"-"+String(esp_random(),HEX);
@@ -120,7 +120,7 @@ void setup() {
    if(!next){server.send(503,"text/plain","LED buffer allocation failed");return;}
   }
   if(!save(candidate)){server.send(500,"text/plain","Persistence failed");return;}
-  if(next) apply(candidate,std::move(next));
+  if(next) applyStripConfiguration(candidate,std::move(next));
   else { config=candidate; setenv("TZ",config.timezone.c_str(),1); tzset(); }
   bumpRevision();server.sendHeader("ETag",configRevision());server.send(200,"application/json","{\"saved\":true}");
  });

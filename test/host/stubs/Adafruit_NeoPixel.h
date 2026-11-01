@@ -18,6 +18,7 @@ class Adafruit_NeoPixel {
   uint16_t numLEDs = 0;
   uint16_t numBytes = 0;
   int pin;
+  bool begun = false;
 
   // Instrumentation for tests.
   static bool failNextAlloc;
@@ -26,9 +27,12 @@ class Adafruit_NeoPixel {
   static long shows;
 
   Adafruit_NeoPixel(uint16_t n, int p, uint16_t) : pin(p) { updateLength(n); }
-  ~Adafruit_NeoPixel() { free(pixels); }
+  ~Adafruit_NeoPixel() { free(pixels); if(pin >= 0) pinMode(pin, INPUT); }
 
-  void begin() { updateLength(numLEDs ? numLEDs : 1); }
+  void begin() { if (pin >= 0) pinMode(pin, OUTPUT); begun=true; }
+  void setPin(int16_t p) { if(begun && pin >= 0) pinMode(pin, INPUT); pin=p; if(begun && pin >= 0) pinMode(pin, OUTPUT); }
+  uint8_t* getPixels() const { return pixels; }
+  uint16_t numPixels() const { return numLEDs; }
 
   void updateLength(uint16_t n) {
     free(pixels);

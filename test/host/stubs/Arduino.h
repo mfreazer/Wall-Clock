@@ -8,6 +8,8 @@
 #pragma once
 
 #include <cmath>
+#include <algorithm>
+#include <cctype>
 #include <cstddef>
 #include <cstdint>
 #include <cstdio>
@@ -18,6 +20,7 @@
 #include <time.h>
 #include <vector>
 
+#define HEX 16
 #define PROGMEM
 #define LOW 0
 #define HIGH 1
@@ -38,6 +41,13 @@ class String {
   String(const char* p) : s(p ? p : "") {}
   String(const std::string& p) : s(p) {}
   explicit String(char c) : s(1, c) {}
+  String(unsigned int n, unsigned char base = 10) {
+    char buf[33];
+    if (base == 16) snprintf(buf, sizeof buf, "%x", n);
+    else snprintf(buf, sizeof buf, "%u", n);
+    s = buf;
+  }
+  String(int n) : s(std::to_string(n)) {}
 
   const char* c_str() const { return s.c_str(); }
   unsigned int length() const { return (unsigned int)s.size(); }
@@ -51,11 +61,19 @@ class String {
   String substring(unsigned int a) const { return String(s.substr(a)); }
   String substring(unsigned int a, unsigned int b) const { return String(s.substr(a, b - a)); }
 
+  void trim() {
+    const auto nonspace=[](unsigned char c) {return !std::isspace(c);};
+    s.erase(s.begin(),std::find_if(s.begin(),s.end(),nonspace));
+    s.erase(std::find_if(s.rbegin(),s.rend(),nonspace).base(),s.end());
+  }
+  void toLowerCase() { for(char& c:s) c=static_cast<char>(std::tolower(static_cast<unsigned char>(c))); }
+  bool concat(const char* p) { if (!p) return false; s += p; return true; }
   String& operator+=(char c) { s += c; return *this; }
   String& operator+=(const String& o) { s += o.s; return *this; }
   String& operator=(const char* p) { s = p ? p : ""; return *this; }
   bool operator==(const String& o) const { return s == o.s; }
   bool operator==(const char* p) const { return s == (p ? p : ""); }
+  bool operator!=(const String& o) const { return s != o.s; }
   bool operator!=(const char* p) const { return !(*this == p); }
   explicit operator bool() const { return !s.empty(); }
 
@@ -68,6 +86,10 @@ class String {
  private:
   mutable size_t rd = 0;
 };
+
+inline String operator+(const String& a, const String& b) { return String(a.s+b.s); }
+inline String operator+(const char* a, const String& b) { return String(std::string(a)+b.s); }
+inline String operator+(const String& a, const char* b) { return String(a.s+std::string(b)); }
 
 class IPAddress {
  public:

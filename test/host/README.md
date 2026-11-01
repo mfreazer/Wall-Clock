@@ -15,12 +15,15 @@ Only a C++17 compiler is required. Node.js adds the UI contract test;
 ASan/UBSan are used automatically when the toolchain supports them
 (`--no-sanitizers` to disable, `--keep` to keep build artifacts).
 
-The same checks can join the project's CTest gate:
+The project CTest gate includes the host checks. To compile the firmware harness, supply ArduinoJson:
 
-```cmake
-# top-level CMakeLists.txt
-add_subdirectory(test/host)
+```sh
+cmake -S . -B build -DWALLCLOCK_ARDUINOJSON_DIR=/path/to/ArduinoJson/src
+cmake --build build
+ctest --test-dir build --output-on-failure
 ```
+
+Without that path CMake reports that the firmware harness is skipped. The runner with `--require-firmware` fails if the dependency or Node is unavailable; CI uses that required mode.
 
 ## What is here
 
@@ -28,7 +31,7 @@ add_subdirectory(test/host)
 |---|---|
 | `run_host_tests.sh` | Runs all four groups, prints one PASS/FAIL/SKIP per check, aggregates the result |
 | `engine_properties.cpp` | Property tests for `include/clock_engine.h`: bounded indices for every supported geometry, monotone dial mapping, distinct minute positions, brightness bounds, half-period complement, phase continuity, saturating blending, validation ranges |
-| `firmware_harness.cpp` | Compiles `src/main.cpp` unmodified and drives it: HTTP routes, config round-trip, 25 rejection cases, NVS failure/fallback, cold boot, LED cadence and pixel semantics, index bounds, button debounce, serial provisioning |
+| `firmware_harness.cpp` | Compiles `src/main.cpp` unmodified and drives it: HTTP routes and conditional writes, config round-trip, rejection cases, NVS/LED allocation failures, cold boot, SNTP callback, LED cadence and pixel semantics, index bounds, button debounce, serial provisioning |
 | `ui_contract_test.mjs` | Executes the real HTML/JS from `include/web_ui.h` under a DOM shim, checks it renders what `/api/config` returns and submits exactly the 13 members `decode()` requires, then hands that body to the firmware harness |
 | `stubs/` | Host shims for Arduino, `WebServer`, `Preferences`, `WiFi`, `esp_timer` and `Adafruit_NeoPixel`. Test instrumentation (captured frames, out-of-range writes, forced NVS failures, virtual clock) lives here |
 | `CMakeLists.txt` | Optional CTest integration, additive and self-disabling when inputs are missing |
@@ -66,3 +69,5 @@ These are the places to look first, in order:
 4. **`stubs/`** — extend only when the firmware starts using a new library
    member, and mirror the real signature. A stub that is more permissive than
    the real API hides bugs; a stub that is stricter creates false failures.
+
+The shims model SNTP callbacks, wall-clock samples, revisions and NeoPixel allocation/pin behavior only as needed for host scenarios. Their assumptions do not establish real ESP32 behavior.

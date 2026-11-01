@@ -26,6 +26,7 @@
 // firmware's wiring, not the engine maths. Engine maths is covered
 // independently by engine_properties.cpp.
 
+#define ARDUINOJSON_ENABLE_ARDUINO_STRING 1
 #include "../../src/main.cpp"  // firmware under test: defines setup(), loop(), config, strip, server, prefs, oscillator
 
 #include <cstdio>
@@ -36,6 +37,7 @@
 extern time_t fakeEpoch;
 extern int64_t fakeUs;
 void hostSetPin(int pin, int level);
+int hostPinMode(int pin);
 
 // ---------------------------------------------------------------------------
 // Minimal check framework: counts checks, prints only what fails.
@@ -77,6 +79,12 @@ static void advance(int ms) {
 // whatever is currently in the simulated NVS.
 static void coldBoot() {
   config = Config();
+  oscillator = Oscillator();
+  strip.reset();
+  timeAcquired.store(false);
+  revisionCounter=0;
+  serialOverflow=false;
+  server.routes.clear();
   previousUs = (uint64_t)fakeUs;
   lastFrame = 0;
   rawButton = stableButton = false;
@@ -92,7 +100,7 @@ static void coldBoot() {
 }
 
 static HostHttpResponse request(const char* path, int method, const std::string& body = "",
-                                const std::string& contentType = "application/json") {
+                                const std::string& contentType = "application/json", const std::string& ifMatch = "") {
   for (auto& route : server.routes) {
     if (route.path == path && route.method == method) {
       server.req = HostHttpRequest();
@@ -100,6 +108,7 @@ static HostHttpResponse request(const char* path, int method, const std::string&
       server.req.method = method;
       server.req.body = body;
       if (!contentType.empty()) server.req.headers["Content-Type"] = contentType;
+      if (!ifMatch.empty()) server.req.headers["If-Match"] = ifMatch;
       server.res = HostHttpResponse();
       route.handler();
       return server.res;
@@ -111,7 +120,9 @@ static HostHttpResponse request(const char* path, int method, const std::string&
 static HostHttpResponse httpGet(const char* path) { return request(path, HTTP_GET); }
 
 static HostHttpResponse httpPostConfig(const std::string& body, const std::string& contentType = "application/json") {
-  return request("/api/config", HTTP_POST, body, contentType);
+  const HostHttpResponse current=httpGet("/api/config");
+  auto etag=current.headers.find("ETag");
+  return request("/api/config", HTTP_POST, body, contentType, etag == current.headers.end() ? "" : etag->second);
 }
 
 // ---------------------------------------------------------------------------
@@ -199,7 +210,7 @@ static void scenario_boot() {
   checkEq((long long)config.high, 50, "default high brightness");
   CHECK(!config.idle);
   CHECK(!config.timezone.empty());
-  checkEq(strip.numLEDs, config.count, "strip allocated to the configured count");
+  checkEq(strip->numLEDs, config.count, "strip allocated to the configured count");
   CHECK(WiFi.status() != WL_CONNECTED);  // no credentials stored yet
   check(Serial.out.find("Provision") != std::string::npos, "boot banner documents serial provisioning");
 }
@@ -242,7 +253,7 @@ static void scenario_config_api() {
   CHECK(config.idle);
   CHECK(config.timezone == "EST5EDT,M3.2.0/2,M11.1.0/2");
   CHECK(sameColor(config.second, Color{0, 255, 0}));
-  checkEq(strip.numLEDs, 144, "strip resized to the new count");
+  checkEq(strip->numLEDs, 144, "strip resized to the new count");
 
   r = httpGet("/api/config");
   {
@@ -358,9 +369,7 @@ static void scenario_rejections() {
     big += std::string(2100, ' ');
     checkEq(httpPostConfig(big).code, 413, "oversized body rejected");
   }
-  // Advisory: parameters on the media type are legal HTTP but currently rejected.
-  if (httpPostConfig(base.json(), "application/json; charset=utf-8").code == 415)
-    note("application/json with charset parameter is rejected (see QA review P2-4)");
+  checkEq(httpPostConfig(base.json(), "application/json; charset=utf-8").code, 200, "JSON media type parameters accepted");
 
   // NVS failure must not apply the candidate.
   Preferences::failWrites = true;
@@ -373,6 +382,72 @@ static void scenario_rejections() {
   Preferences::failWrites = false;
 }
 
+static void scenario_concurrency_and_allocation() {
+  prefs.store.kv.clear();
+  coldBoot();
+  const std::string body=withCount(30);
+  const HostHttpResponse initial=httpGet("/api/config");
+  const std::string tag=initial.headers.at("ETag");
+  check(!tag.empty(), "config GET supplies revision");
+  checkEq(request("/api/config",HTTP_POST,body,"application/json").code,428,"missing If-Match rejected");
+  checkEq(config.count,60,"missing precondition leaves config unchanged");
+
+  hostSetPin(BUTTON_PIN, LOW); advance(100);
+  hostSetPin(BUTTON_PIN, HIGH); advance(100);
+  CHECK(config.idle);
+  const std::string storedAfterButton=prefs.store.kv["config"];
+  const HostHttpResponse stale=request("/api/config",HTTP_POST,body,"application/json",tag);
+  checkEq(stale.code,412,"stale write rejected after button press");
+  CHECK(config.idle && config.count==60);
+  CHECK(prefs.store.kv["config"]==storedAfterButton);
+  CHECK(httpGet("/api/config").headers.at("ETag")!=tag);
+
+  const auto oldStrip=strip.get();
+  const auto oldBytes=strip->getPixels();
+  const auto oldCount=strip->numPixels();
+  const auto oldShows=Adafruit_NeoPixel::shows;
+  Adafruit_NeoPixel::failNextAlloc=true;
+  checkEq(httpPostConfig(body).code,503,"buffer allocation failure reported");
+  CHECK(strip.get()==oldStrip && strip->getPixels()==oldBytes && strip->numPixels()==oldCount);
+  CHECK(prefs.store.kv["config"]==storedAfterButton);
+  checkEq(hostPinMode(LED_PIN),OUTPUT,"failed candidate leaves LED pin active");
+  checkEq(Adafruit_NeoPixel::shows,oldShows,"allocation failure does not blank strip");
+
+  // Non-geometry changes reuse the existing strip without blanking or allocating.
+  Payload sameCount; sameCount.idle="true"; sameCount.low="11";
+  Adafruit_NeoPixel::failNextAlloc=true;
+  checkEq(httpPostConfig(sameCount.json()).code,200,"same-count update does not allocate");
+  CHECK(strip.get()==oldStrip && strip->getPixels()==oldBytes);
+  CHECK(Adafruit_NeoPixel::failNextAlloc);
+  checkEq(Adafruit_NeoPixel::shows,oldShows,"same-count update does not blank strip");
+  Adafruit_NeoPixel::failNextAlloc=false;
+
+  const std::string beforeReboot=httpGet("/api/config").headers.at("ETag");
+  coldBoot();
+  checkEq(request("/api/config",HTTP_POST,body,"application/json",beforeReboot).code,412,"pre-boot revision rejected after reboot");
+  CHECK(config.count==60 && config.idle);
+}
+
+static void scenario_sync_status() {
+  prefs.store.kv.clear(); fakeEpoch=1793448000; coldBoot();
+  auto synced=[]() {
+    JsonDocument d;
+    auto response=httpGet("/api/status");
+    if(deserializeJson(d,response.body.c_str())) return false;
+    return d["synchronized"].as<bool>();
+  };
+  CHECK(!synced());
+  Adafruit_NeoPixel::reset(); advance(50);
+  for(const auto& frame:Adafruit_NeoPixel::frames)
+    for(uint8_t value:frame) check(value==0,"plausible epoch without SNTP stays dark");
+  hostTimeSync(); CHECK(synced());
+  Adafruit_NeoPixel::reset(); advance(50);
+  bool lit=false;
+  for(const auto& frame:Adafruit_NeoPixel::frames) for(uint8_t value:frame) lit |= value!=0;
+  CHECK(lit);
+  coldBoot(); CHECK(!synced());
+}
+
 static void scenario_persistence() {
   prefs.store.kv.clear();
   coldBoot();
@@ -382,7 +457,7 @@ static void scenario_persistence() {
   // Cold boot with valid NVS restores the configuration.
   coldBoot();
   checkEq(config.count, 96, "configuration restored after cold boot");
-  checkEq(strip.numLEDs, 96, "strip resized from persisted configuration");
+  checkEq(strip->numLEDs, 96, "strip resized from persisted configuration");
 
   // Corrupt NVS must fall back to defaults rather than to garbage/partial state.
   prefs.store.kv["config"] = "{\"count\":96}";
@@ -408,6 +483,7 @@ static void scenario_display() {
   // A synchronized clock renders at a steady cadence.
   const time_t epoch = 1793448000;  // 2026-10-31T12:00:00Z
   fakeEpoch = epoch;
+  hostTimeSync();
   struct tm local;
   localtime_r(&epoch, &local);
 
@@ -467,7 +543,7 @@ static void scenario_display() {
     checkEq(httpPostConfig(withCount(n)).code, 200, "count " + std::to_string(n) + " accepted");
     Adafruit_NeoPixel::reset();
     advance(60);
-    checkEq(strip.numLEDs, n, "strip resized for count " + std::to_string(n));
+    checkEq(strip->numLEDs, n, "strip resized for count " + std::to_string(n));
     CHECK(Adafruit_NeoPixel::violations.empty());
     CHECK(!Adafruit_NeoPixel::frames.empty());
     for (auto& frame : Adafruit_NeoPixel::frames) checkEq((long long)frame.size(), n * 3LL, "frame size for count " + std::to_string(n));
@@ -516,14 +592,29 @@ static void scenario_serial() {
   advance(5);
   checkEq(WiFi.beginCount, 0, "garbage serial input does not provision Wi-Fi");
 
+  const std::string attack=std::string(161,'x')+"WIFI Evil\tsecretpass\n";
+  Serial.in.assign(attack.begin(),attack.end()); advance(5);
+  checkEq(WiFi.beginCount,0,"suffix of oversized serial line is not interpreted as a command");
+
   const std::string line = "WIFI TestNet\tsecretpass\n";
   Serial.in.assign(line.begin(), line.end());
   advance(5);
-  CHECK(prefs.store.kv["ssid"] == "TestNet");
-  CHECK(prefs.store.kv["password"] == "secretpass");
+  JsonDocument credentials;
+  CHECK(!deserializeJson(credentials,prefs.store.kv["wifi"]));
+  CHECK(credentials["ssid"] == "TestNet");
+  CHECK(credentials["password"] == "secretpass");
   checkEq(WiFi.beginCount, 1, "credentials trigger Wi-Fi association");
   CHECK(WiFi.lastSsid == "TestNet");
   CHECK(WiFi.lastPassword == "secretpass");
+  const std::string saved=prefs.store.kv["wifi"];
+  Preferences::failWrites=true;
+  const std::string replacement="WIFI Other\tanotherpass\n";
+  Serial.in.assign(replacement.begin(),replacement.end()); advance(5);
+  Preferences::failWrites=false;
+  CHECK(prefs.store.kv["wifi"]==saved);
+  checkEq(WiFi.beginCount,1,"failed credential write does not reconnect");
+  coldBoot();
+  CHECK(WiFi.lastSsid=="TestNet" && WiFi.lastPassword=="secretpass");
 }
 
 // Optional: POST the exact bytes the browser UI produces (written by
@@ -559,6 +650,8 @@ int main(int argc, char** argv) {
       {"boot defaults and route registration", scenario_boot},
       {"configuration API round-trip", scenario_config_api},
       {"invalid configuration rejection", scenario_rejections},
+      {"conditional updates and allocation failures", scenario_concurrency_and_allocation},
+      {"SNTP synchronization status", scenario_sync_status},
       {"persistence, cold boot and corrupt NVS", scenario_persistence},
       {"LED output, cadence and bounds", scenario_display},
       {"physical button", scenario_button},

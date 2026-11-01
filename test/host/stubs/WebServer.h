@@ -31,6 +31,7 @@ struct HostHttpResponse {
   std::string contentType;
   std::string body;
   bool sent = false;
+  std::map<std::string, std::string> headers;
 };
 
 class WebServer {
@@ -69,11 +70,13 @@ class WebServer {
   bool hasArg(const char* name) const { return name && std::string(name) == "plain" && !req.body.empty(); }
 
   String header(const char* name) const { return String(req.header(name ? name : "")); }
+  bool hasHeader(String name) const { return !req.header(name.s).empty(); }
+  void sendHeader(const String& name, const String& value, bool = false) { res.headers[name.s]=value.s; }
   size_t clientContentLength() const { return req.body.size(); }
 
-  void send(int code, const char* contentType, const String& body) { res = {code, contentType ? contentType : "", body.s, true}; }
-  void send_P(int code, const char* contentType, const char* body) { res = {code, contentType ? contentType : "", body ? body : "", true}; }
-  void send(int code) { res = {code, "", "", true}; }
+  void send(int code, const char* contentType, const String& body) { res.code=code; res.contentType=contentType ? contentType : ""; res.body=body.s; res.sent=true; }
+  void send_P(int code, const char* contentType, const char* body) { res.code=code; res.contentType=contentType ? contentType : ""; res.body=body ? body : ""; res.sent=true; }
+  void send(int code) { res.code=code; res.sent=true; }
 
  private:
   int port_;

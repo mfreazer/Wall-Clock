@@ -24,6 +24,7 @@ int64_t fakeUs = 1000000;
 time_t fakeEpoch = 0;
 
 static int g_millis = 1000;
+static int g_pin_mode[64];
 static int g_pin[64];  // INPUT_PULLUP idle level: HIGH. Initialised below.
 
 static struct PinInit {
@@ -32,7 +33,8 @@ static struct PinInit {
   }
 } pinInit;
 
-void pinMode(int, int) {}
+void pinMode(int pin, int mode) { if(pin >= 0 && pin < 64) g_pin_mode[pin]=mode; }
+int hostPinMode(int pin) { return g_pin_mode[pin]; }
 
 int digitalRead(int pin) { return (pin >= 0 && pin < 64) ? g_pin[pin] : HIGH; }
 
@@ -58,4 +60,18 @@ void configTzTime(const char* tz, const char*, const char*, const char*) {
 extern "C" time_t time(time_t* out) noexcept {
   if (out) *out = fakeEpoch;
   return fakeEpoch;
+}
+
+#include <esp_sntp.h>
+static sntp_sync_time_cb_t syncCallback = nullptr;
+void sntp_set_time_sync_notification_cb(sntp_sync_time_cb_t cb) { syncCallback=cb; }
+void hostTimeSync() {
+  struct timeval tv{fakeEpoch, 0};
+  if (syncCallback) syncCallback(&tv);
+}
+uint32_t esp_random() { static uint32_t value = 0; return ++value; }
+extern "C" int gettimeofday(struct timeval* tv, void*) noexcept {
+  tv->tv_sec = fakeEpoch;
+  tv->tv_usec = fakeUs % 1000000;
+  return 0;
 }

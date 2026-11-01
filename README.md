@@ -181,7 +181,7 @@ g++ -std=c++17 -Wall -Wextra -Wpedantic -Iinclude test/requirements_test.cpp -o 
 /tmp/wallclock-requirements
 ```
 
-With Node.js installed, CTest also runs `test/web_ui_test.js`. If Node.js is missing, CMake reports that the UI test was not registered. The C++ and UI tests are host-only and are not run by `pio test -e esp32`.
+For the full QA suite, run `test/host/run_host_tests.sh --require-firmware`; see [test/host/README.md](test/host/README.md) for dependencies and CTest integration. With Node.js installed, CTest also runs `test/web_ui_test.js`. If Node.js is missing, CMake reports that the UI test was not registered. The C++ and UI tests are host-only and are not run by `pio test -e esp32`.
 
 Source layout: `include/clock_engine.h` contains hardware-independent geometry, modulation, validation and rendering; `src/main.cpp` handles SNTP, NVS, HTTP, controls and NeoPixel output; `include/web_ui.h` is the self-contained local UI. No credentials should be committed.
 
