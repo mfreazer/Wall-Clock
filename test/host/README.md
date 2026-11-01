@@ -8,7 +8,7 @@ Run everything:
 
 ```sh
 test/host/run_host_tests.sh              # skips what is absent, exits 0/1
-test/host/run_host_tests.sh --require-firmware   # what CI uses once src/main.cpp exists
+test/host/run_host_tests.sh --require-firmware   # required sandbox gate
 ```
 
 Only a C++17 compiler is required. Node.js adds the UI contract test;
@@ -23,7 +23,7 @@ cmake --build build
 ctest --test-dir build --output-on-failure
 ```
 
-Without that path CMake reports that the firmware harness is skipped. The runner with `--require-firmware` fails if the dependency or Node is unavailable; CI uses that required mode.
+Without that path CMake reports that the firmware harness is skipped. The runner with `--require-firmware` fails if the dependency or Node is unavailable; Use that required mode for the sandbox gate.
 
 ## What is here
 
