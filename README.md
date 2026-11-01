@@ -125,7 +125,7 @@ The project should include automated tests for:
 
 Hardware integration tests will be required to verify actual LED rendering, electrical operation, and perceived display behavior.
 
-For the registry-blocked review sandbox, `./tools/sandbox_esp32_build.sh --emulate` builds the ESP32 target and runs a limited boot/serial smoke test. **Its third-party compiler is not provenance-verified; do not flash or release its output.** See [docs/Sandbox-ESP32.md](docs/Sandbox-ESP32.md) for requirements, provenance, and limitations.
+For the registry-blocked review sandbox, `./tools/sandbox_esp32_build.sh --emulate` builds the ESP32 target and runs a limited boot/serial smoke test. **Its third-party compiler is not provenance-verified; do not flash or release its output.** See [docs/Sandbox-ESP32.md](docs/Sandbox-ESP32.md) for requirements, provenance, and limitations. For an unchanged source snapshot, `./tools/sandbox_esp32_cached_smoke.sh` reuses the Git-stored emulator-only image without rebuilding; it checks for stale inputs first.
 
 Documentation
 
