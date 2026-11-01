@@ -78,7 +78,7 @@ cp "$work/python/bin/scons" "$work/core/packages/tool-scons/scons.py"
 cp -a "$work/python/esptool" "$work/core/packages/tool-esptoolpy/"
 cp "$work/python/bin/esptool.py" "$work/core/packages/tool-esptoolpy/esptool.py"
 # Copy only build inputs (including edits); do not expose the repository or unrelated files.
-inputs=(platformio.ini src include tools/sandbox_esp32_smoke.mjs)
+inputs=(platformio.ini src include tools/sandbox_esp32_build.sh tools/sandbox_esp32_smoke.mjs)
 [[ ! -d "$repo/lib" ]] || inputs+=(lib)
 tar -C "$repo" -cf - "${inputs[@]}" | tar -C "$work/project" -xf -
 libdeps="$work/project/.pio/libdeps/esp32"
