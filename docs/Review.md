@@ -39,3 +39,9 @@ The required host runner passed with ASan/UBSan: 9 reported checks passed, inclu
 `Not/A/Zone` and other malformed or unsupported values are rejected. A restricted, documented POSIX grammar is checked before web saves and at boot. Previously persisted invalid or newly unsupported values put the device into an explicit recovery state rather than silently displaying UTC; the display stays dark until a valid configuration is saved. Host tests cover invalid inputs, simulated persisted-data recovery, and Montréal DST boundaries using host libc. The exact ESP32 newlib behavior and real NVS recovery remain unverified.
 
 The DNS-rebinding, unauthenticated access, early-body-limit and write-endurance findings remain open.
+
+## PR #2 QA follow-up
+
+QA's re-review and addendum are preserved in [QA-Review-PR-2.md](QA-Review-PR-2.md) as historical evidence (commit `aed15bd`). The two previously overlapping workflows have been consolidated; the supplemental workflow requires the real ArduinoJson-backed firmware harness and uses strict CMake configuration, while the sandbox remains the immediate gate. The snapshot guard now checks the smoke script and is included in the host runner when the snapshot exists; a stale snapshot must be refreshed or removed in the same PR. These workflow changes have not been verified by GitHub CI in this review.
+
+The boot-time LED allocation failure is still only reported over serial; `/api/status` does not report display availability. The nonstandard test `assert` override and hardware/security limitations remain open.

@@ -251,6 +251,23 @@ run_ui_contract() {
   fi
 }
 
+# A deliberately committed snapshot is required to match the source. If it is
+# removed entirely, there is no cached snapshot to validate.
+run_snapshot_checks() {
+  [ -d "$ROOT/sandbox-artifacts/esp32" ] || return
+  if [ ! -f "$ROOT/test/sandbox_artifact_test.py" ]; then
+    fail "cached artifact guard" "test/sandbox_artifact_test.py missing"
+  elif ! command -v python3 >/dev/null 2>&1; then
+    fail "cached artifact guard" "python3 is required while the snapshot exists"
+  elif ! python3 "$ROOT/tools/sandbox_esp32_artifact.py" verify > "$WORK/artifact.out" 2>&1; then
+    fail "cached artifact guard" "$(show_log "$WORK/artifact.out" 10)"
+  elif python3 "$ROOT/test/sandbox_artifact_test.py" > "$WORK/artifact.out" 2>&1; then
+    pass "cached artifact guard"
+  else
+    fail "cached artifact guard" "$(show_log "$WORK/artifact.out" 30)"
+  fi
+}
+
 echo "== native project tests =="
 run_native_tests
 echo
@@ -263,6 +280,11 @@ echo
 echo "== firmware integration =="
 run_firmware_harness
 echo
+if [ -d "$ROOT/sandbox-artifacts/esp32" ]; then
+  echo "== cached emulator snapshot guard =="
+  run_snapshot_checks
+  echo
+fi
 printf '%s\n' "--------------------------------------------"
 printf 'passed %d, failed %d, skipped %d\n' "$PASSED" "$FAILED" "$SKIPPED"
 [ "$FAILED" -eq 0 ]

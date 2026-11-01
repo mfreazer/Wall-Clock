@@ -11,19 +11,20 @@ test/host/run_host_tests.sh              # skips what is absent, exits 0/1
 test/host/run_host_tests.sh --require-firmware   # required sandbox gate
 ```
 
-Only a C++17 compiler is required. Node.js adds the UI contract test;
+A C++17 compiler is required. Node.js adds the UI contract test; when the cached snapshot is present, its guard tests also require Python 3 and Git.
 ASan/UBSan are used automatically when the toolchain supports them
 (`--no-sanitizers` to disable, `--keep` to keep build artifacts).
 
 The project CTest gate includes the host checks. To compile the firmware harness, supply ArduinoJson:
 
 ```sh
-cmake -S . -B build -DWALLCLOCK_ARDUINOJSON_DIR=/path/to/ArduinoJson/src
+cmake -S . -B build -DWALLCLOCK_REQUIRE_FIRMWARE_TESTS=ON \
+  -DWALLCLOCK_ARDUINOJSON_DIR=/path/to/ArduinoJson/src
 cmake --build build
 ctest --test-dir build --output-on-failure
 ```
 
-Without that path CMake reports that the firmware harness is skipped. The runner with `--require-firmware` fails if the dependency or Node is unavailable; Use that required mode for the sandbox gate.
+With `WALLCLOCK_REQUIRE_FIRMWARE_TESTS=ON`, CMake fails configuration if firmware or ArduinoJson is missing rather than silently skipping the harness. Without that option, the harness is optional and CMake reports when it is skipped. The runner with `--require-firmware` fails if the dependency or Node is unavailable; use that required mode for the sandbox gate. When the emulator snapshot exists, the runner also checks it against current inputs; refresh or delete a stale snapshot in the same PR.
 
 ## What is here
 

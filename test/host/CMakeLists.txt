@@ -35,6 +35,17 @@ if(EXISTS "${WALLCLOCK_ROOT}/include/clock_engine.h")
 endif()
 
 # --- firmware integration harness -----------------------------------------
+# The explicit gate must not silently omit firmware integration coverage.
+option(WALLCLOCK_REQUIRE_FIRMWARE_TESTS "Fail configuration if the firmware harness cannot be built" OFF)
+if(WALLCLOCK_REQUIRE_FIRMWARE_TESTS)
+  if(NOT EXISTS "${WALLCLOCK_ROOT}/src/main.cpp")
+    message(FATAL_ERROR "WALLCLOCK_REQUIRE_FIRMWARE_TESTS requires src/main.cpp")
+  endif()
+  if(NOT WALLCLOCK_ARDUINOJSON_DIR OR NOT EXISTS "${WALLCLOCK_ARDUINOJSON_DIR}/ArduinoJson.h")
+    message(FATAL_ERROR "WALLCLOCK_REQUIRE_FIRMWARE_TESTS requires WALLCLOCK_ARDUINOJSON_DIR containing ArduinoJson.h")
+  endif()
+endif()
+
 if(EXISTS "${WALLCLOCK_ROOT}/src/main.cpp" AND WALLCLOCK_ARDUINOJSON_DIR)
   add_executable(firmware_host_harness firmware_harness.cpp stubs/host_stubs.cpp)
   target_compile_definitions(firmware_host_harness PRIVATE ARDUINOJSON_ENABLE_ARDUINO_STRING=1)

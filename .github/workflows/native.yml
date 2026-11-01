@@ -1,4 +1,5 @@
-name: native
+# Supplemental automation only. The sandbox remains the short-term test gate.
+name: Build and test
 
 on:
   push:
@@ -13,58 +14,40 @@ jobs:
     name: host tests
     runs-on: ubuntu-latest
     env:
-      # Reused by both steps below; the suite clones it itself when unset.
       ARDUINOJSON_SRC: ${{ github.workspace }}/.deps/ArduinoJson
     steps:
       - uses: actions/checkout@v4
-
-      - name: Compiler
-        run: g++ --version
-
-      # The firmware harness needs the same ArduinoJson version platformio.ini
-      # pins. A plain clone keeps CI dependency-free; bump this tag together
-      # with lib_deps.
-      - name: ArduinoJson
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Fetch pinned ArduinoJson
         run: |
-          if [ -f src/main.cpp ]; then
-            git clone --quiet --depth 1 --branch v7.2.1 \
-              https://github.com/bblanchon/ArduinoJson .deps/ArduinoJson
-          else
-            echo "no firmware on this branch; the harness will report SKIP"
-          fi
-
-      # The host suite reports SKIP for anything it cannot see, so this stays
-      # green on branches without the firmware. Once src/main.cpp exists every
-      # step is required to run, which makes this a real gate.
-      - name: Host verification suite
-        run: |
-          if [ -f src/main.cpp ]; then
-            bash test/host/run_host_tests.sh --require-firmware
-          else
-            bash test/host/run_host_tests.sh
-          fi
-
-      # The project's own CMake/CTest gate. Which tests are registered is owned
-      # by the top-level CMakeLists.txt; test/host/CMakeLists.txt adds the host
-      # suite when it is included with add_subdirectory(test/host).
+          git clone --quiet --depth 1 --branch v7.2.1 \
+            https://github.com/bblanchon/ArduinoJson "$ARDUINOJSON_SRC"
+          test "$(git -C "$ARDUINOJSON_SRC" rev-parse HEAD)" = f9fe8557f13d8949eafd49ebd93a2929c4e5065f
+      - name: Required host verification suite
+        run: bash test/host/run_host_tests.sh --require-firmware
       - name: CMake/CTest (Release)
         run: |
-          if [ ! -f CMakeLists.txt ]; then
-            echo "no CMakeLists.txt on this branch; skipping the CTest gate"
-            exit 0
-          fi
           cmake -S . -B build -DCMAKE_BUILD_TYPE=Release \
+            -DWALLCLOCK_REQUIRE_FIRMWARE_TESTS=ON \
             -DWALLCLOCK_ARDUINOJSON_DIR="$ARDUINOJSON_SRC/src"
           cmake --build build --parallel
           ctest --test-dir build --output-on-failure
-
       - name: CMake/CTest (Debug + sanitizers)
         run: |
-          if [ ! -f CMakeLists.txt ]; then
-            echo "no CMakeLists.txt on this branch; skipping the CTest gate"
-            exit 0
-          fi
           cmake -S . -B build-debug -DCMAKE_BUILD_TYPE=Debug -DWALLCLOCK_SANITIZERS=ON \
+            -DWALLCLOCK_REQUIRE_FIRMWARE_TESTS=ON \
             -DWALLCLOCK_ARDUINOJSON_DIR="$ARDUINOJSON_SRC/src"
           cmake --build build-debug --parallel
           ctest --test-dir build-debug --output-on-failure
+  firmware:
+    name: ESP32 target build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: pip install platformio==6.1.18
+      - run: pio run -e esp32

@@ -2,7 +2,7 @@
 const fs = require('fs');
 const vm = require('vm');
 const assert = require('assert');
-const html = fs.readFileSync('include/web_ui.h', 'utf8');
+const html = fs.readFileSync(require('path').join(__dirname, '../include/web_ui.h'), 'utf8');
 const script = html.match(/<script>([\s\S]*?)<\/script>/)[1];
 const initial = {count:60,offset:0,clockwise:true,idle:false,period:4.5,low:10,high:50,timezone:'UTC0',am:[255,100,20],pm:[180,40,255],minute:[20,150,255],second:[255,30,40],background:[255,255,255]};
 let remote = {...initial}, tag='"boot-0"', posts=[], rejectNext=false, needsRepair=false;

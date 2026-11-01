@@ -22,7 +22,8 @@ def digest(path):
 
 
 def source_hashes(root):
-    files = [Path('platformio.ini'), Path('tools/sandbox_esp32_build.sh')]
+    files = [Path('platformio.ini'), Path('tools/sandbox_esp32_build.sh'),
+             Path('tools/sandbox_esp32_smoke.mjs')]
     present_dirs = []
     for directory in ('src', 'include', 'lib'):
         base = root / directory
@@ -61,7 +62,8 @@ def verify(images_dir):
 
 def create(work):
     if subprocess.run(['git', '-C', str(REPO), 'status', '--porcelain', '--untracked-files=all', '--',
-                       'platformio.ini', 'src', 'include', 'lib', 'tools/sandbox_esp32_build.sh'],
+                       'platformio.ini', 'src', 'include', 'lib', 'tools/sandbox_esp32_build.sh',
+                       'tools/sandbox_esp32_smoke.mjs'],
                       check=True, capture_output=True, text=True).stdout:
         raise ValueError('commit build inputs before creating an artifact snapshot')
     commit = subprocess.check_output(['git', '-C', str(REPO), 'rev-parse', 'HEAD'], text=True).strip()

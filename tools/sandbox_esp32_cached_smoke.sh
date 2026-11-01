@@ -16,7 +16,17 @@ node=$(command -v node)
 repo=$(cd "$(dirname "$0")/.." && pwd)
 mkdir -p "$HOME/.cache"
 work=$(mktemp -d "$HOME/.cache/wallclock-esp32-smoke-XXXXXXXX")
-cleanup() { if (( keep )); then echo "Smoke log retained: $work/emulator.log"; else rm -rf -- "$work"; fi; }
+cleanup() {
+  if (( keep )); then
+    if [[ -f "$work/emulator.log" ]]; then
+      echo "Smoke log retained: $work/emulator.log"
+    else
+      echo "Scratch directory retained (emulation did not start): $work"
+    fi
+  else
+    rm -rf -- "$work"
+  fi
+}
 trap cleanup EXIT
 mkdir -p "$work"/{emu,images,root}
 # Copy first, then verify exactly the images to be executed and the current build inputs.

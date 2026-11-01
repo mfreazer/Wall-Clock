@@ -12,7 +12,8 @@
     "include/web_ui.h": "9774c39eaf98aac79e58b3329517de8e713c500489a1b323dd127ee0b9a396e6",
     "platformio.ini": "f87bc6651d3f1ec416013f87497fd102bf1ec54071970a93c319c20fec8a30ee",
     "src/main.cpp": "201851214e9ab4322af6bf53907ef6ad480f3e8aef746cfca168ea8b342dc70e",
-    "tools/sandbox_esp32_build.sh": "5fce7de200b6adf299748ad11c58431a7adef80dc00379718619ee483935c692"
+    "tools/sandbox_esp32_build.sh": "5fce7de200b6adf299748ad11c58431a7adef80dc00379718619ee483935c692",
+    "tools/sandbox_esp32_smoke.mjs": "2d11a475dd0b4edd0f4b1799161ca8647a739d5e42365c573fbd14b2db47121d"
   },
   "images_sha256": {
     "firmware.bin": "7a7aaca21d4e0f9eb1c5c0679f1db0f63e33dae3a0c3d941e601612ac33a3182",

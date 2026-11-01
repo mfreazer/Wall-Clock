@@ -27,7 +27,7 @@ The active-low button between GPIO27 and ground toggles idle illumination on a d
 
 The interface is HTTP without authentication, intended **only for an isolated, trusted local Wi-Fi network**. Do not forward port 80, put it on a guest/shared network, or treat it as production-secure. No CORS is enabled; JSON-only writes prevent ordinary cross-origin browser forms. This does not protect against untrusted LAN clients. DNS rebinding is not prevented. The 2048-byte application check occurs after WebServer buffers the request, so it is not a memory-exhaustion defense. Configuration writes and button toggles have no rate limit and repeatedly write flash. TLS/authentication, early request limits and write-rate/endurance policy remain future work.
 
-Wi-Fi credentials are provisioned over USB serial and held together in one ESP32 NVS value, not source control. A legacy two-key credential pair is read if the new value is absent; it is not erased automatically. Serial lines longer than 160 bytes are discarded in full. NVS is not encrypted by this example. The UI does not expose Wi-Fi credentials.
+Wi-Fi credentials are provisioned over USB serial and held together in one ESP32 NVS value, not source control. A legacy two-key credential pair is read if the new value is absent; it is not erased automatically. SSID must be 1–32 bytes; the password must be empty or 8–63 bytes. Raw 64-hex PSKs and WPA3-specific credential forms outside those bounds are not supported. Serial lines longer than 160 bytes are discarded in full. NVS is not encrypted by this example. The UI does not expose Wi-Fi credentials.
 
 ## Hardware profile and safety
 
