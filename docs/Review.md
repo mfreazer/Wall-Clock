@@ -32,7 +32,7 @@ For requirement-specific gaps, see Traceability.md. Passing native tests is not 
 
 QA's report and host harness were cherry-picked from `fa92a7b` and `15133e7` onto this branch. The harness was adapted for the revised API and firmware (ETag/If-Match, SNTP callback, LED driver ownership and atomic credential value). It caught a C++17 `std::apply` name collision in the revised code, now fixed by renaming the function. Simulated tests were added for stale and missing preconditions, callback gating, allocation failure without a pin glitch, save failure, reboot, and oversized serial commands. The UI's actual POST is passed to the firmware harness by the runner.
 
-The required host runner passed with ASan/UBSan: 9 reported checks passed, including 932 firmware checks and 46 UI checks. CTest passed all 7 tests in Release and Debug (host property and firmware suites sanitized). Mutating save-before-apply, stale revision enforcement, time-zone validation and the invalid-configuration display gate made the relevant host tests fail. These are host results, not hardware evidence.
+The required host runner passed with ASan/UBSan: 10 groups with the cached snapshot (9 without), including 932 firmware checks and 46 UI checks. CTest passed all 7 tests in Release and Debug (host property and firmware suites sanitized). Mutating save-before-apply, stale revision enforcement, time-zone validation and the invalid-configuration display gate made the relevant host tests fail. These are host results, not hardware evidence.
 
 ## Time-zone follow-up
 
@@ -42,6 +42,6 @@ The DNS-rebinding, unauthenticated access, early-body-limit and write-endurance 
 
 ## PR #2 QA follow-up
 
-QA's re-review and addendum are preserved in [QA-Review-PR-2.md](QA-Review-PR-2.md) as historical evidence (commit `aed15bd`). The two previously overlapping workflows have been consolidated; the supplemental workflow requires the real ArduinoJson-backed firmware harness and uses strict CMake configuration, while the sandbox remains the immediate gate. The snapshot guard now checks the smoke script and is included in the host runner when the snapshot exists; a stale snapshot must be refreshed or removed in the same PR. These workflow changes have not been verified by GitHub CI in this review.
+QA's re-review and addendum are preserved in [QA-Review-PR-2.md](QA-Review-PR-2.md) as historical evidence (commit `aed15bd`). The two previously overlapping workflows have been consolidated; the supplemental workflow requires the real ArduinoJson-backed firmware harness and uses strict CMake configuration, while the sandbox remains the immediate gate. The snapshot guard now checks the smoke script and is included in the host runner when the snapshot exists; a stale snapshot must be refreshed or removed in the same PR. The supplemental workflow runs on pushes to `main` and on pull requests, not on non-PR branch pushes; this avoids duplicate runs for same-repository PR branches. These workflow changes have not been verified by GitHub CI in this review.
 
 The boot-time LED allocation failure is still only reported over serial; `/api/status` does not report display availability. The nonstandard test `assert` override and hardware/security limitations remain open.

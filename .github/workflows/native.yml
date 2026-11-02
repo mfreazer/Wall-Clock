@@ -2,8 +2,9 @@
 name: Build and test
 
 on:
+  # PR branches run on pull_request; direct non-PR branch pushes are not covered.
   push:
-    branches: ['**']
+    branches: [main]
   pull_request:
 
 permissions:

@@ -189,3 +189,49 @@ two workflows still disagree about coverage.
 Merge-order caveat: the snapshot is valid only for the current build inputs. If
 the firmware changes again before merge, refresh the snapshot in that same PR or
 delete it — do not leave an 868 KiB image that the runner will refuse.
+
+## Closure: fixes verified at `1c3dd88`
+
+Posted as review `5730934898`. Every fix was reproduced from a fresh clone of
+the PR branch, running the steps the consolidated workflow contains rather than
+my working tree:
+
+| Claim | Result |
+| --- | --- |
+| Host suite: 10/10 groups | `passed 10, failed 0, skipped 0`, including `PASS cached artifact guard` |
+| Cached emulator smoke | `SMOKE TEST PASSED`, prompt and rejection observed |
+| Strict Release CTest | 7/7 |
+| Strict Debug CTest + ASan/UBSan | 7/7 |
+| Workflows consolidated | single `native.yml`, valid YAML, `contents: read` |
+
+Fixes checked in the directions that matter, not just the happy path:
+
+- Editing `tools/sandbox_esp32_smoke.mjs` now fails `verify`, makes
+  `cached_smoke.sh` exit 1, and makes the required runner report
+  `passed 9, failed 1`.
+- Changing `src/main.cpp` makes the required runner fail; deleting
+  `sandbox-artifacts/` skips the group cleanly (`passed 9, failed 0`). The
+  refresh-or-delete rule is enforced in both directions.
+- `WALLCLOCK_REQUIRE_FIRMWARE_TESTS=ON` fails configuration for a missing
+  ArduinoJson path, a directory without `ArduinoJson.h`, and a missing
+  `src/main.cpp`, closing the silent-skip gap.
+- The workflow's ArduinoJson commit assertion matches the real `v7.2.1` tag
+  commit (`f9fe8557…`), so the pin is meaningful.
+- The guard fails with `python3 is required while the snapshot exists` when
+  Python is absent, and `test/host/README.md` documents the added Python 3 and
+  Git dependency.
+- My earlier review text is preserved byte-identical at `aed15bd`.
+
+Two non-blocking notes raised: `docs/Review.md:35` still says "9 reported
+checks" where the gate now reports 10 with the snapshot and 9 without; and
+`native.yml` triggers on both `push` (all branches) and `pull_request`, so
+same-repo PR pushes run twice, which a `concurrency:` group would halve.
+
+No blocking finding remains from either review. What is still unverified is
+unchanged: no observed GitHub CI run, no verified official toolchain, and no
+physical hardware, real NVS or power-loss, electrical, timing or accuracy
+evidence. The emulator smoke proves a boot prompt and one rejection path.
+
+Standing cost now enforced by the gate: any further firmware change requires
+either a full sandbox rebuild plus roughly another 868 KiB in history, or
+deleting the snapshot and losing the cache.
