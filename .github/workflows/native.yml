@@ -1,0 +1,54 @@
+# Supplemental automation only. The sandbox remains the short-term test gate.
+name: Build and test
+
+on:
+  # PR branches run on pull_request; direct non-PR branch pushes are not covered.
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  host:
+    name: host tests
+    runs-on: ubuntu-latest
+    env:
+      ARDUINOJSON_SRC: ${{ github.workspace }}/.deps/ArduinoJson
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Fetch pinned ArduinoJson
+        run: |
+          git clone --quiet --depth 1 --branch v7.2.1 \
+            https://github.com/bblanchon/ArduinoJson "$ARDUINOJSON_SRC"
+          test "$(git -C "$ARDUINOJSON_SRC" rev-parse HEAD)" = f9fe8557f13d8949eafd49ebd93a2929c4e5065f
+      - name: Required host verification suite
+        run: bash test/host/run_host_tests.sh --require-firmware
+      - name: CMake/CTest (Release)
+        run: |
+          cmake -S . -B build -DCMAKE_BUILD_TYPE=Release \
+            -DWALLCLOCK_REQUIRE_FIRMWARE_TESTS=ON \
+            -DWALLCLOCK_ARDUINOJSON_DIR="$ARDUINOJSON_SRC/src"
+          cmake --build build --parallel
+          ctest --test-dir build --output-on-failure
+      - name: CMake/CTest (Debug + sanitizers)
+        run: |
+          cmake -S . -B build-debug -DCMAKE_BUILD_TYPE=Debug -DWALLCLOCK_SANITIZERS=ON \
+            -DWALLCLOCK_REQUIRE_FIRMWARE_TESTS=ON \
+            -DWALLCLOCK_ARDUINOJSON_DIR="$ARDUINOJSON_SRC/src"
+          cmake --build build-debug --parallel
+          ctest --test-dir build-debug --output-on-failure
+  firmware:
+    name: ESP32 target build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: pip install platformio==6.1.18
+      - run: pio run -e esp32

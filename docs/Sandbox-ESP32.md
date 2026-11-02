@@ -1,0 +1,51 @@
+# ESP32 sandbox build and emulator smoke test
+
+The normal PlatformIO registry downloads were inaccessible in the review sandbox. For this Linux x86-64 sandbox, the following workaround builds the current `platformio.ini`, `src`, `include`, and (if present) `lib` files, including local edits, then optionally executes the image in an emulator:
+
+```sh
+./tools/sandbox_esp32_build.sh --emulate
+```
+
+Add `--keep` to retain the scratch directory and emulator log under `~/.cache`; otherwise the script removes it on exit. The command downloads sources from GitHub and Python packages from PyPI; `--emulate` also downloads from npm. It needs Git, Python/pip, tar, `unshare`, mount, `setpriv`, chroot, readelf, and several GB of free space; emulation additionally needs Node 18+, npm and timeout. Unprivileged user, mount and network namespaces must be enabled. This is a sandbox-specific fallback, not a replacement for a normal verified PlatformIO installation. If build inputs or dependencies in `platformio.ini` change, the explicitly staged sources and package versions in the script must be updated.
+
+## Provenance and safety limitation
+
+**Do not use the resulting binary for release or flashing.** The Xtensa GCC 8.4.0+2021r2-patch5 compiler is taken from the third-party `ivvil/rhodium` Git repository, commit `6cd22a00191d1bc7aa5ba9418c3655b9b0765577`, tree `d6de6d2e467b078b7680a1e7755e68ef145aa185`. The script pins the commit and checks SHA-256 of five key executables. These checks identify the mirror contents; they do **not** establish that they match the official compiler. The official PlatformIO archive SHA-256 listed in [the PlatformIO registry mirror manifest](https://github.com/ivankravets/pioreg-ci-mirror/blob/main/tools/toolchain-xtensa-esp32-linux_x86_64/manifest.json) is `58c9d6f867f93b6e55491c200cb539274c8ae3dccf76daf29428aa64dd54d727`, but the sandbox could not download that archive to compare it. A verified official toolchain and independent target rebuild remain required before release.
+
+The script obtains `platform-espressif32` 6.9.0, Arduino ESP32 2.0.17, NeoPixel 1.12.3 and ArduinoJson 7.2.1 from their upstream Git repositories at pinned commits. It constructs local PlatformIO metadata, including the framework's PlatformIO version `3.20017.0` in place of upstream's `2.0.17`; this is not the original PlatformIO framework archive and has not been byte-compared to it. PlatformIO 6.1.18, SCons 4.8.1 and esptool 4.5.1 come from PyPI. Their transitive Python dependencies are not hash-locked, so this is not a fully reproducible or provenance-verified supply chain. The emulator npm tarball is pinned to 1.2.0 and a SHA-512 digest; that identifies the package, not its trustworthiness.
+
+The build and emulation execute in separate user/mount/network namespaces, in chroots with a clean environment, no network, no host home directory, no capabilities and a copied working tree. Compiler/framework packages and emulator inputs are mounted read-only. This limits exposure to the third-party executable but is defense in depth, not proof of safety or authenticity. The initial package downloads and preparation happen outside that execution isolation.
+
+## Observed result
+
+On the review revision, a fresh `--emulate --keep` run built and linked the `esp32dev` target with the configured library versions. `readelf` identified the output as ELF32 Tensilica Xtensa; PlatformIO reported 45,768 bytes of RAM and 845,285 bytes of flash (14.0% and 64.5% of its reported limits). The build produced an ESP32 image. Its embedded app descriptor reports `arduino-lib-builder`, `Mar 5 2024`, and `v4.4.7-dirty`; it comes from the prebuilt Arduino ESP32 SDK, not the sketch build. The IDF version is consistent with the pinned framework, but is not independent proof of toolchain or firmware provenance. The third-party emulator `esp32-emu` booted a 4 MB flash image assembled from the bootloader, partition table, `boot_app0.bin`, and firmware, and the firmware printed the provisioning prompt and rejected an invalid short Wi-Fi password over emulated serial.
+
+This is a **limited emulator smoke test**, not proof that the firmware works on a physical ESP32. In particular, Wi-Fi/SNTP, HTTP/browser access, real NVS and power loss, target newlib time-zone/DST semantics, GPIO, RMT/LED timing, current, and electrical behavior have not been validated. Emulator diagnostics included unimplemented peripheral-reset warnings; they are captured in the retained log with `--keep`. The host suite and physical acceptance remain separate gates.
+
+## Reusing the GitHub-hosted test image in a future session
+
+The branch contains one deliberately committed, **emulator-only** snapshot in `sandbox-artifacts/esp32/` (firmware, bootloader, partition table, `boot_app0.bin`, and a manifest; about 870 KiB total). This is an explicit exception to the normal rule against generated binaries in Git: the review sandbox cannot reach GitHub's release-asset upload/download hosts, and the user chose a small Git-stored snapshot. It contains no pre-provisioned Wi-Fi credentials. It was compiled with the unverified third-party compiler described above: **never flash or release it**. Its source commit and SHA-256 values are recorded in `manifest.json`; the ESP32 framework boot files originate from the pinned upstream Arduino ESP32 checkout described above. Checksums identify the saved bytes, but are not independent proof of compiler, firmware, or manifest authenticity. The smoke-script hash was added to the existing manifest after QA review; it matches the script at the recorded source commit. The binary was not rebuilt for this metadata-only change, and the cached smoke test was rerun.
+
+In a new session, check out the branch containing this snapshot and run:
+
+```sh
+./tools/sandbox_esp32_cached_smoke.sh
+```
+
+The runner verifies the four image hashes and compares the current `platformio.ini`, all files and directory presence under `src`, `include` and `lib`, the build script, and the emulator smoke script to the recorded inputs. It refuses a stale or corrupted snapshot, including when an additional source file appears. It downloads the small, SHA-512-pinned `esp32-emu` 1.2.0 tarball from npm, then runs the same boot/invalid-password smoke test without fetching a compiler, downloading the framework, or rebuilding firmware. The emulator runs in an isolated chroot without network access or the host home directory; npm download occurs before isolation. `--keep` retains the emulator log under `~/.cache` for the current sandbox. The cache directory is not a durable cross-session store. Test the guard itself with:
+
+```sh
+python3 test/sandbox_artifact_test.py -v
+```
+
+This saves time only when the firmware build inputs match. If firmware build inputs or the smoke script change, **refresh the snapshot or delete it in the same PR**; do not merge a stale image. The required host runner automatically runs its guard tests when the snapshot directory is present. If the snapshot is deleted, it skips that optional group. Never use the old image after such changes. This cache is not a substitute for the native tests, a verified official-toolchain build, or hardware acceptance.
+
+### Refreshing the snapshot intentionally
+
+Each snapshot update increases Git history by roughly the image size, so update it only when reuse justifies the cost; do not add the much larger compiler, SDK, build directories, logs, credentials, or private data to Git. GitHub Releases or another proper artifact store would be preferable if both upload and download are reachable in the intended environment; GitHub release assets are not reachable from this sandbox.
+
+1. Commit the intended `platformio.ini`, `src`, `include`, `lib` (if present), `tools/sandbox_esp32_build.sh`, and `tools/sandbox_esp32_smoke.mjs` changes on the session branch. The artifact creation command requires these inputs to be clean.
+2. Run `./tools/sandbox_esp32_build.sh --emulate --keep`. Save the printed scratch-directory path. It builds the current inputs and checks the emulator smoke test; it may use several GB temporarily.
+3. Run `python3 tools/sandbox_esp32_artifact.py create /path/to/retained/scratch`. The command checks the staged build inputs against the current committed files, requires a passing emulator log, copies the four images, and writes the manifest. This check detects accidental mismatches; it does not independently authenticate the toolchain or a tampered scratch directory.
+4. Run `./tools/sandbox_esp32_cached_smoke.sh` and `python3 test/sandbox_artifact_test.py -v`. Review the manifest, provenance and changed files. Commit the five files under `sandbox-artifacts/esp32/` and push the current session branch. Do not publish the image as a release or describe it as hardware-verified.
+5. Once no longer needed, remove the retained scratch directory printed in step 2. It is outside the repository and is not persisted by the sandbox snapshot.
