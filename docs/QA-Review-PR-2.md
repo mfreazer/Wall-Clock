@@ -235,3 +235,23 @@ evidence. The emulator smoke proves a boot prompt and one rejection path.
 Standing cost now enforced by the gate: any further firmware change requires
 either a full sandbox rebuild plus roughly another 868 KiB in history, or
 deleting the snapshot and losing the cache.
+
+## Follow-up verified at `997500c` — review closed
+
+Workflow triggers are now `pull_request` plus `push` to `main` only, so a
+same-repository PR runs once and non-PR branch pushes run nothing; the duplicate
+run note is closed. `docs/Review.md` now reports "10 groups with the cached
+snapshot (9 without)", matching what the gate prints in both states, and the QA
+closure was preserved byte-identical (237 lines).
+
+Re-verified from a fresh clone at the new head: host gate `passed 10, failed 0,
+skipped 0` with `PASS cached artifact guard`; strict Release CTest 7/7; strict
+Debug CTest with ASan/UBSan 7/7; `test/sandbox_artifact_test.py` 9 tests, OK;
+cached emulator smoke `SMOKE TEST PASSED`. Posted as issue comment `6588979268`.
+
+No blocking findings and no open notes remain from any of the three reviews.
+Everything still outstanding is outside what a host or emulator run can settle:
+neither workflow job has been observed executing on GitHub (the `pio run -e
+esp32` job is the one that would close the target-build gap), the compiler is
+still an unverified third-party mirror, and there is no hardware, real-NVS,
+power-loss, electrical, timing or accuracy evidence.
