@@ -22,6 +22,23 @@ for (const [path, offset] of [['/build/bootloader.bin', 0x1000], ['/build/partit
   flash.set(image, offset);
 }
 
+// The synthetic pair is not present in the firmware image. Observing it in a
+// fresh worker's emulated DRAM after reboot is positive evidence of a flash
+// read, though not proof that a particular NVS API or Wi-Fi connection worked.
+function containsPair(bytes) {
+  const buffer = Buffer.from(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  return buffer.includes(Buffer.from('SandboxTest')) && buffer.includes(Buffer.from('password123'));
+}
+function containsAnyCredential(bytes) {
+  const buffer = Buffer.from(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  return buffer.includes(Buffer.from('SandboxTest')) || buffer.includes(Buffer.from('password123'));
+}
+function targetRam(sim) {
+  const data = sim.memory.dataMem;
+  if (!(data instanceof Uint8Array) || data.byteLength === 0) throw new Error('emulator DRAM unavailable');
+  return data;
+}
+
 async function boot(phase) {
   const sim = new SimulatorWorker();
   let uart = '', runtimeError;
@@ -42,19 +59,23 @@ async function boot(phase) {
     await waitFor('Provision: WIFI <ssid><TAB><password>');
     if (phase === 'write') {
       if (!uart.includes('wifi NOT_FOUND')) throw new Error('blank NVS did not report missing credentials');
+      if (containsAnyCredential(targetRam(sim))) throw new Error('synthetic credentials unexpectedly present in blank-boot DRAM');
       const before = Buffer.from(flash.slice(nvs.offset, nvs.offset + nvs.size));
       sim.sendUart('WIFI SandboxTest\tpassword123\n');
       await waitFor('Wi-Fi credentials saved');
       const after = Buffer.from(flash.slice(nvs.offset, nvs.offset + nvs.size));
-      if (before.equals(after) || !after.includes(Buffer.from('SandboxTest')) || !after.includes(Buffer.from('password123'))) {
+      if (before.equals(after) || !containsPair(after)) {
         throw new Error('synthetic credential pair was not observed in emulated NVS');
       }
     } else if (phase === 'reboot') {
       if (uart.includes('Invalid stored Wi-Fi credentials') || uart.includes('wifi NOT_FOUND') || uart.includes('ssid NOT_FOUND')) {
         throw new Error('stored credentials were not read successfully');
       }
-    } else if (!uart.includes('wifi NOT_FOUND')) {
-      throw new Error('erased-NVS negative control did not report missing credentials');
+      if (!containsPair(flash.subarray(nvs.offset, nvs.offset + nvs.size))) throw new Error('credential pair missing from NVS after reboot');
+      if (!containsPair(targetRam(sim))) throw new Error('credential pair not observed in fresh emulated DRAM after reboot');
+    } else {
+      if (!uart.includes('wifi NOT_FOUND')) throw new Error('erased-NVS negative control did not report missing credentials');
+      if (containsAnyCredential(targetRam(sim))) throw new Error('synthetic credentials unexpectedly present in erased-control DRAM');
     }
     console.log(`PERSISTENCE PHASE PASSED: ${phase}`);
   } catch (error) {
