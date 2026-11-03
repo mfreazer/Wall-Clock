@@ -270,6 +270,8 @@ static void scenario_config_api() {
     CHECK(!deserializeJson(doc, r.body.c_str()));
     CHECK(doc["synchronized"].is<bool>());
     CHECK(doc["connected"].is<bool>());
+    CHECK(doc["ledBufferAvailable"].is<bool>());
+    CHECK(doc["ledBufferAvailable"].as<bool>());
   }
 }
 
@@ -415,6 +417,9 @@ static void scenario_concurrency_and_allocation() {
   const auto oldShows=Adafruit_NeoPixel::shows;
   Adafruit_NeoPixel::failNextAlloc=true;
   checkEq(httpPostConfig(body).code,503,"buffer allocation failure reported");
+  JsonDocument allocationStatus;
+  CHECK(!deserializeJson(allocationStatus,httpGet("/api/status").body.c_str()));
+  CHECK(allocationStatus["ledBufferAvailable"].as<bool>());
   CHECK(strip.get()==oldStrip && strip->getPixels()==oldBytes && strip->numPixels()==oldCount);
   CHECK(prefs.store.kv["config"]==storedAfterButton);
   checkEq(hostPinMode(LED_PIN),OUTPUT,"failed candidate leaves LED pin active");
@@ -433,6 +438,41 @@ static void scenario_concurrency_and_allocation() {
   coldBoot();
   checkEq(request("/api/config",HTTP_POST,body,"application/json",beforeReboot).code,412,"pre-boot revision rejected after reboot");
   CHECK(config.count==60 && config.idle);
+}
+
+static void scenario_boot_allocation_recovery() {
+  prefs.store.kv.clear();
+  fakeEpoch=1793448000;
+  Adafruit_NeoPixel::failNextAlloc=true;
+  coldBoot();
+  CHECK(!strip);
+  CHECK(Serial.out.find("LED buffer allocation failed")!=std::string::npos);
+  auto status=[]() {
+    JsonDocument doc;
+    CHECK(!deserializeJson(doc,httpGet("/api/status").body.c_str()));
+    return doc;
+  };
+  CHECK(status()["ledBufferAvailable"].is<bool>());
+  CHECK(!status()["ledBufferAvailable"].as<bool>());
+  hostTimeSync();
+  CHECK(status()["synchronized"].as<bool>());
+  CHECK(!status()["ledBufferAvailable"].as<bool>());
+  Adafruit_NeoPixel::reset(); advance(50);
+  CHECK(Adafruit_NeoPixel::frames.empty());
+
+  Adafruit_NeoPixel::failNextAlloc=true;
+  checkEq(httpPostConfig(Payload{}.json()).code,503,"retry allocation failure reported");
+  CHECK(!status()["ledBufferAvailable"].as<bool>());
+  Preferences::failWrites=true;
+  checkEq(httpPostConfig(Payload{}.json()).code,500,"persistence failure does not install replacement");
+  Preferences::failWrites=false;
+  CHECK(!strip && !status()["ledBufferAvailable"].as<bool>());
+  checkEq(httpPostConfig(Payload{}.json()).code,200,"save recovers boot allocation failure");
+  CHECK(strip && status()["ledBufferAvailable"].as<bool>());
+  Adafruit_NeoPixel::reset(); advance(50);
+  bool lit=false;
+  for(const auto& frame:Adafruit_NeoPixel::frames) for(uint8_t value:frame) lit |= value!=0;
+  CHECK(lit);
 }
 
 static void scenario_sync_status() {
@@ -693,6 +733,7 @@ int main(int argc, char** argv) {
       {"configuration API round-trip", scenario_config_api},
       {"invalid configuration rejection", scenario_rejections},
       {"conditional updates and allocation failures", scenario_concurrency_and_allocation},
+      {"boot LED buffer failure and recovery", scenario_boot_allocation_recovery},
       {"SNTP synchronization status", scenario_sync_status},
       {"persistence, cold boot and corrupt NVS", scenario_persistence},
       {"invalid stored timezone recovery", scenario_invalid_timezone_recovery},
