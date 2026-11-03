@@ -1,7 +1,7 @@
 {
   "schema": 1,
   "purpose": "Emulator-only test image. Do not flash or release.",
-  "source_commit": "7b451b63cee267b89f9fd7ab680da09d4155485d",
+  "source_commit": "ef1c60f8e742f45dbf38303a5dac2f1ca5966287",
   "source_directories": [
     "src",
     "include"
@@ -9,14 +9,14 @@
   "inputs_sha256": {
     "include/clock_engine.h": "2ba73f827ff945aa6f4c9d68af9ad3206881954ee695030494e3514d640efde5",
     "include/timezone_rule.h": "ebb205a7aa4d5c506f246180bd4a8f7f666b4f66d29f5ddb5b85cab543a1b531",
-    "include/web_ui.h": "9774c39eaf98aac79e58b3329517de8e713c500489a1b323dd127ee0b9a396e6",
+    "include/web_ui.h": "912468e28f7e2b809508942696bfac1c9076022b1b9c0e0d702354cfd52bf8d1",
     "platformio.ini": "f87bc6651d3f1ec416013f87497fd102bf1ec54071970a93c319c20fec8a30ee",
-    "src/main.cpp": "201851214e9ab4322af6bf53907ef6ad480f3e8aef746cfca168ea8b342dc70e",
+    "src/main.cpp": "86844e1a2c05d1b3a2238aa26aece83360f493f29171637a791d8558f54343b8",
     "tools/sandbox_esp32_build.sh": "5fce7de200b6adf299748ad11c58431a7adef80dc00379718619ee483935c692",
     "tools/sandbox_esp32_smoke.mjs": "2d11a475dd0b4edd0f4b1799161ca8647a739d5e42365c573fbd14b2db47121d"
   },
   "images_sha256": {
-    "firmware.bin": "7a7aaca21d4e0f9eb1c5c0679f1db0f63e33dae3a0c3d941e601612ac33a3182",
+    "firmware.bin": "5969d95197fb26012f0348246917804dc220788c44b5d1bdb3f6dc0694b8a238",
     "bootloader.bin": "3d234a7471f67b013686dabd4dee7c1fa915c9928463616a94bc9297acf1abf8",
     "partitions.bin": "148b959cbff1c38aa8e1d5c0ba9d612c54997b945e56a63f41223eef650653a1",
     "boot_app0.bin": "f94c5d786a7a8fab06ac5d10e33bf37711a6697636dc037559ea19cc410a17f0"

@@ -61,3 +61,15 @@ To reproduce, first prepare a fresh retained sandbox bundle with `./tools/sandbo
 ```
 
 Pass `--keep` as a second argument to retain the probe build and emulator logs. The command verifies the pinned emulator tarball, checks package versions and five compiler executable hashes, and builds and executes the probe in separate isolated chroots. The retained bundle is mutable and these checks do not authenticate all its files. The probe must report `TZ_TARGET_PASS 19`; an injected incorrect expected value was rejected. The selected cases are not exhaustive validation of every accepted POSIX rule, and emulator success is not hardware, Wi-Fi/SNTP, NVS, or accuracy verification.
+
+## Emulated NVS completed-write persistence
+
+With a matching cached snapshot, run:
+
+```sh
+./tools/sandbox_esp32_cached_smoke.sh --persistence
+```
+
+This boots the actual cached firmware with erased, in-memory emulated flash, sends a **synthetic** SSID and password over emulated serial, verifies the completion message and changed bytes in the NVS partition, then starts a fresh emulator against the same flash and checks the firmware does not report missing or invalid stored credentials. Finally it erases the emulated NVS partition and confirms the missing-credentials signal reappears as a negative control. The probe validates the expected partition layout first. An injected erase before the persistence reboot makes the test fail. The synthetic credentials never enter the committed image or real hardware.
+
+This covers a **completed** credential write and simulated reboot with the emulator's flash implementation. It does not prove Wi-Fi connection, real ESP32 flash behavior, atomicity, interrupted writes or power-loss recovery; physical tests remain necessary. `--keep` retains verbose emulator diagnostics under `~/.cache` in the current sandbox.
