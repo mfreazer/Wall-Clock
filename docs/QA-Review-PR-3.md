@@ -107,3 +107,38 @@ electrical safety, accuracy, holdover and drift remain untested. The
 emulator-tested image still comes from the unverified third-party compiler
 mirror. The unauthenticated HTTP interface still requires an access-policy
 decision.
+
+## Follow-up verified at `828f569`
+
+Posted as issue comment `6603746054`. The firmware image is unchanged in this
+follow-up (nothing under `sandbox-artifacts/`), so the byte-identical rebuild
+recorded above still applies to the committed snapshot.
+
+| Check | Result |
+| --- | --- |
+| Required host runner (fresh clone) | `passed 10, failed 0, skipped 0` |
+| Strict CTest Release / Debug + ASan | 7/7 and 7/7 |
+| Cached smoke | passed |
+| Cached persistence, strengthened | all three phases passed |
+| QA review text | preserved byte-identical |
+| Flash figure, CI run reference | corrected; `Observed result` now pins `ef1c60f` |
+
+The new positive check was probed for sensitivity rather than accepted: it reads
+the emulator DRAM view (`sim.memory.dataMem`, which throws instead of skipping if
+unavailable), and two mutations both failed at the reboot phase with exit 1 —
+limiting the check to the first 4 KiB of DRAM, and masking the evidence with a
+zeroed buffer. Because each worker boots with fresh DRAM, the write phase shows
+the pair absent before anything is sent, and the reboot phase shows it present in
+a different worker without anything resent over serial. That is genuine evidence
+of a flash read, and the documentation states the limit correctly.
+
+Declining to add the emulator tests to CI is recorded with its reason
+(unverified unprivileged namespace support on the runner). One observation: the
+test now depends on an emulator-internal structure, which is acceptable while the
+tarball remains SHA-512-pinned; an emulator bump would fail the test rather than
+silently weaken it.
+
+Remaining gaps are unchanged: physical flash behaviour, interrupted writes and
+power loss, Wi-Fi/SNTP, target HTTP/browser, GPIO/RMT timing, electrical,
+accuracy and holdover, official provenance of the third-party compiler, and the
+access-policy decision for the unauthenticated interface.
