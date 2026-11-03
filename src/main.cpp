@@ -110,7 +110,7 @@ void setup() {
  configTzTime(config.timezone.c_str(),"pool.ntp.org","time.nist.gov");
  server.on("/",HTTP_GET,[]{server.send_P(200,"text/html",WEB_UI);});
  server.on("/api/config",HTTP_GET,[]{JsonDocument d;encode(d,config);String text;serializeJson(d,text);server.sendHeader("ETag",configRevision());server.send(200,"application/json",text);});
- server.on("/api/status",HTTP_GET,[]{JsonDocument d;d["connected"]=WiFi.status()==WL_CONNECTED;d["configurationNeedsRepair"]=configurationNeedsRepair;d["synchronized"]=timeAcquired.load() && time(nullptr)>1700000000;String text;serializeJson(d,text);server.send(200,"application/json",text);});
+ server.on("/api/status",HTTP_GET,[]{JsonDocument d;d["connected"]=WiFi.status()==WL_CONNECTED;d["configurationNeedsRepair"]=configurationNeedsRepair;d["ledBufferAvailable"]=bool(strip);d["synchronized"]=timeAcquired.load() && time(nullptr)>1700000000;String text;serializeJson(d,text);server.send(200,"application/json",text);});
  server.on("/api/config",HTTP_POST,[]{
   // JSON-only writes block ordinary cross-origin forms, not untrusted clients
   // or DNS rebinding. This endpoint is not authenticated.

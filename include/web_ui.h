@@ -18,7 +18,10 @@ async function refresh(){
 async function poll(){
  try{
   let r=await fetch('/api/status',{cache:'no-store'});if(!r.ok)throw Error();let s=await r.json();
-  status.textContent=s.configurationNeedsRepair===true?'Stored settings invalid or unavailable · LEDs off. Review and save settings.':s.synchronized?(s.connected?'Time acquired · last sync age unknown':'Offline · holding acquired time'):'Waiting for network time · LEDs off';
+  let warnings=[];
+  if(s.configurationNeedsRepair===true)warnings.push('Stored settings invalid or unavailable · LEDs off. Review and save settings.');
+  if(s.ledBufferAvailable===false)warnings.push('LED buffer unavailable · display disabled. Retry by saving settings.');
+  status.textContent=warnings.length?warnings.join(' '):s.synchronized?(s.connected?'Time acquired · last sync age unknown':'Offline · holding acquired time'):'Waiting for network time · LEDs off';
   let configResponse=await fetch('/api/config',{cache:'no-store'});if(!configResponse.ok)throw Error();
   let tag=configResponse.headers.get('ETag');if(!tag)throw Error();
   if(revision && tag!==revision){stale=true;save.disabled=true;message.textContent='Settings changed on the clock. Reload to discard your edits before saving.'}

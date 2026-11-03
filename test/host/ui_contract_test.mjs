@@ -140,7 +140,7 @@ let submittedType = null;
 let submittedRevision = null;
 let revision = '"test-0"';
 const headers = {get: (name) => name.toLowerCase() === 'etag' ? revision : null};
-let statusResponse = { connected: false, synchronized: true };
+let statusResponse = { connected: false, synchronized: true, ledBufferAvailable: true };
 let saveResponse = { ok: true, code: 200, text: '{"saved":true}' };
 
 const fetchStub = async (url, options = {}) => {
@@ -163,7 +163,7 @@ const fetchStub = async (url, options = {}) => {
 // ---------------------------------------------------------------------------
 // Run the page script
 // ---------------------------------------------------------------------------
-const run = new Function('document', 'fetch', 'setInterval', `${script}\n;return {form, status, message};`);
+const run = new Function('document', 'fetch', 'setInterval', `${script}\n;return {form, status, message, poll};`);
 const page = run(document, fetchStub, () => 0);
 await new Promise((resolve) => setTimeout(resolve, 25)); // let refresh() settle
 
@@ -182,6 +182,18 @@ const hex = (rgb) => `#${rgb.map((n) => n.toString(16).padStart(2, '0')).join(''
 for (const key of ['am', 'pm', 'minute', 'second', 'background'])
   check(form.elements[key] && form.elements[key].value === hex(serverConfig[key]), `${key} colour field shows #rrggbb`);
 check(/Offline|synchronized|Waiting/i.test(page.status.textContent), 'status line reflects /api/status');
+statusResponse.ledBufferAvailable = false;
+await page.poll();
+check(/LED buffer unavailable/.test(page.status.textContent), 'allocation failure is visible');
+check(!/Offline|Time acquired/.test(page.status.textContent), 'allocation failure supersedes normal time status');
+statusResponse.configurationNeedsRepair = true;
+await page.poll();
+check(/Stored settings invalid/.test(page.status.textContent) && /LED buffer unavailable/.test(page.status.textContent),
+      'configuration and LED allocation failures are both visible');
+statusResponse.ledBufferAvailable = true;
+statusResponse.configurationNeedsRepair = false;
+await page.poll();
+check(/Offline/.test(page.status.textContent), 'normal status returns after recovery');
 
 // 2. Editing and submitting produces the document the firmware accepts.
 form.elements.count.value = '90';

@@ -29,7 +29,7 @@ Multiple statuses may apply. No requirement is claimed system-accepted. No line/
 |---|---|---|---|
 | WC-SYS-001 | F `setup`: WiFi + `configTzTime` | None | Partial: no ESP32 build or network test |
 | WC-SYS-002 | F `loop`: epoch → `localtime_r` → E `render` | R `positions` tests supplied times only | Partial: real time derivation untested |
-| WC-SYS-003 | E `Config.timezone`; F `applyStripConfiguration`, `setup`; U zone field | R `validation`; `test/timezone_test.cpp`; H invalid stored recovery | Blocked: supported TZ subset unapproved; DST checked on host libc only, not target newlib |
+| WC-SYS-003 | E `Config.timezone`; F `applyStripConfiguration`, `setup`; U zone field | R `validation`; `test/timezone_test.cpp`; H invalid stored recovery | Blocked: supported TZ subset unapproved; representative DST cases checked on host libc and ESP32/newlib in emulation, not physical hardware |
 | WC-SYS-004 | F GET `/api/status`; U `poll` | H `scenario_sync_status` | Blocked: callback confirms a sync since boot but not its recency; indication TBD; target callback integration untested |
 | WC-SYS-005 | F reconnect + system-clock holdover | None | Blocked: outage policy unapproved and untested |
 | WC-SYS-006 | F `setup`, `loop`: boot dark pending SNTP callback and plausible epoch | None | Blocked: restart policy unapproved and untested |
@@ -71,7 +71,7 @@ Multiple statuses may apply. No requirement is claimed system-accepted. No line/
 | WC-SYS-053 | F decode/API; U numerical fields; E `valid` | R `validation` | Partial: native rules and H mocked interaction tested; target interaction untested |
 | WC-SYS-054 | F encode/decode/API; U five colors | R `collisions` tests selected rendered colors only | Partial: H tests malformed RGB/API and UI contract; target workflow untested |
 | WC-SYS-055 | F API/button; U idle checkbox | R `collisions` tests core idle only | Partial: H tests stubbed button/API and UI contract; target interfaces untested |
-| WC-SYS-056 | F decode + save-before-apply; E `valid` | R `validation`; H `scenario_rejections` | Partial: host rejection and state invariance checked; documented TZ subset validated on host; target newlib semantics untested |
+| WC-SYS-056 | F decode + save-before-apply; E `valid` | R `validation`; H `scenario_rejections` | Partial: host rejection and state invariance checked; representative target newlib cases pass in emulation, not exhaustive or physical hardware |
 | WC-SYS-057 | F `save`, boot `decode`, NVS | H `scenario_persistence`, `scenario_rejections` | Partial: simulated storage, reboot and write failure tested; real power cycles untested |
 | WC-SYS-058 | F HTTP no auth; JSON writes; U | None | Blocked: access policy unapproved; JSON/no CORS is not LAN authentication |
 | WC-SYS-060 | F `loop` 20ms frame target and `strip.show` | R `modulation` tests frame values only | Partial: physical refresh timing untested |
@@ -98,7 +98,7 @@ Multiple statuses may apply. No requirement is claimed system-accepted. No line/
 | WC-T-009 | `collisions`: all collision types at 60 offsets | N=60 only |
 | WC-T-010 | `collisions`: saturated blend; L: non-saturated blend | Selected RGB values |
 | WC-T-011 | `collisions`: all-channel saturation; L: channelwise saturation | RGB8 profile only |
-| WC-T-012 | `collisions`: 11:59:58, 12:00:01, 00:01:02 | Selection near boundaries; Montréal DST tested on host libc, not target newlib |
+| WC-T-012 | `collisions`: 11:59:58, 12:00:01, 00:01:02 | Selection near boundaries; Montréal DST tested on host libc and ESP32/newlib in emulation, not physical hardware |
 | WC-T-013 | `collisions`: idle off, default white, custom idle on | Core only |
 | WC-T-014 | R `validation`; H JSON rejection, state invariance, simulated save/reload, corrupt NVS and timezone recovery | **Partial**: target NVS, persistence failures and power loss untested |
 | WC-T-015 | None | **Not run; blocked** pending approved outage/restart policy and ESP32/network fixture |
