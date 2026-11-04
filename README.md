@@ -171,7 +171,7 @@ python3 tools/serial_config.py /dev/ttyUSB0 get > clock-settings.json
 python3 tools/serial_config.py /dev/ttyUSB0 set clock-settings.json
 ```
 
-Use the actual serial device path. The tool does not require third-party Python packages. The clock validates the entire configuration and reports errors without applying invalid or incomplete updates; a concurrent button change rejects a stale update. The serial path is not yet verified on physical hardware. Before network time is available, the LEDs remain off. There is no setup access point or cloud dependency beyond network time.
+Use the actual serial device path. The tool does not require third-party Python packages. The clock validates the entire configuration and reports errors without applying invalid or incomplete updates; a button change during the transfer rejects the update. If settings changed after you saved the JSON file but before the transfer began, read and review them again to avoid overwriting those changes. The serial path is not yet verified on physical hardware. Before network time is available, the LEDs remain off. There is no setup access point or cloud dependency beyond network time.
 
 ## Native tests (no ESP32 needed)
 
