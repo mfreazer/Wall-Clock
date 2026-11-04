@@ -133,12 +133,15 @@ void setup() {
   configurationNeedsRepair=false;
   bumpRevision();server.sendHeader("ETag",configRevision());server.send(200,"application/json","{\"saved\":true}");
  });
- const char* headers[]={"Content-Type","If-Match"};server.collectHeaders(headers,2);server.begin();
+ const char* headers[]={"Content-Type","If-Match"};server.collectHeaders(headers,2);
+ // Fail closed while the authenticated HTTPS interface is under development.
+ // The unauthenticated HTTP handlers must not be reachable on the network.
+ Serial.println("Web configuration disabled pending secure HTTPS setup.");
  Serial.println("Provision: WIFI <ssid><TAB><password> then Enter. Button toggles idle light.");previousUs=esp_timer_get_time();
 }
 void loop() {
  uint64_t now=esp_timer_get_time();oscillator.advance((now-previousUs)/1000000.0,config.period);previousUs=now;
- server.handleClient();
+ // No HTTP listener is started; do not poll the legacy web server.
  while(Serial.available()) {
   char ch=Serial.read();if(ch=='\n'){
    if(!serialOverflow && serialLine.startsWith("WIFI ")){int split=serialLine.indexOf('\t',5);if(split>5){String ssid=serialLine.substring(5,split),pass=serialLine.substring(split+1);

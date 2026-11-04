@@ -66,14 +66,14 @@ Multiple statuses may apply. No requirement is claimed system-accepted. No line/
 | WC-SYS-043 | E `add` saturation, 8-bit `Color` | R `collisions`; L | Core tested clipping; RGB hardware profile only |
 | WC-SYS-044 | E index-independent collision logic | R `collisions` at all 60 offsets | Core tested N=60; not every count/geometry combination |
 | WC-SYS-050 | F `setup` input pullup; `loop` debounce | H `scenario_button` | Blocked: button function unapproved; real GPIO untested |
-| WC-SYS-051 | F routes; U web form | H `scenario_config_api`, `ui_contract` | Partial: mocked HTTP and DOM only; no browser/ESP32 execution |
+| WC-SYS-051 | F dormant routes; U web form | H `scenario_config_api`, `ui_contract`; H `scenario_boot` checks listener disabled | Blocked: web listener temporarily disabled pending protected access; mocked handlers/DOM only, no target browser execution |
 | WC-SYS-052 | F/U controls | None | Blocked: interface functions unapproved |
 | WC-SYS-053 | F decode/API; U numerical fields; E `valid` | R `validation` | Partial: native rules and H mocked interaction tested; target interaction untested |
 | WC-SYS-054 | F encode/decode/API; U five colors | R `collisions` tests selected rendered colors only | Partial: H tests malformed RGB/API and UI contract; target workflow untested |
 | WC-SYS-055 | F API/button; U idle checkbox | R `collisions` tests core idle only | Partial: H tests stubbed button/API and UI contract; target interfaces untested |
 | WC-SYS-056 | F decode + save-before-apply; E `valid` | R `validation`; H `scenario_rejections` | Partial: host rejection and state invariance checked; representative target newlib cases pass in emulation, not exhaustive or physical hardware |
 | WC-SYS-057 | F `save`, boot `decode`, NVS | H `scenario_persistence`, `scenario_rejections` | Partial: simulated storage, reboot and write failure tested; real power cycles untested |
-| WC-SYS-058 | F HTTP no auth; JSON writes; U | None | Blocked: access policy unapproved; JSON/no CORS is not LAN authentication |
+| WC-SYS-058 | F legacy HTTP handlers without authentication; listener disabled | H `scenario_boot`, `scenario_serial` | Blocked: protected standalone web access and USB provisioning not yet implemented; listener not started or polled in host tests, physical network unverified |
 | WC-SYS-060 | F `loop` 20ms frame target and `strip.show` | R `modulation` tests frame values only | Partial: physical refresh timing untested |
 | WC-SYS-061 | F `esp_timer_get_time` vs `time`; E oscillator | R `modulation` | Partial: core independence tested, firmware clock correction untested |
 | WC-SYS-062 | F loop/apply retain oscillator; E `render` does not mutate it | R `modulation` | Partial: core render continuity tested, driver integration untested |

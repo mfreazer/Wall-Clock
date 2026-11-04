@@ -86,6 +86,8 @@ static void coldBoot() {
   revisionCounter=0;
   serialOverflow=false;
   server.routes.clear();
+  server.started = false;
+  server.handleCalls = 0;
   previousUs = (uint64_t)fakeUs;
   lastFrame = 0;
   rawButton = stableButton = false;
@@ -204,7 +206,9 @@ static void scenario_boot() {
   CHECK(hasRoute("/api/config", HTTP_GET));
   CHECK(hasRoute("/api/status", HTTP_GET));
   CHECK(hasRoute("/api/config", HTTP_POST));
-  CHECK(server.started);
+  check(!server.started, "legacy unauthenticated HTTP listener is not started");
+  check(Serial.out.find("Web configuration disabled") != std::string::npos,
+        "boot reports web configuration unavailable");
   checkEq(config.count, 60, "default pixel count");
   checkEq((long long)(config.period * 10), 45, "default modulation period is 4.5 s");
   checkEq((long long)config.low, 10, "default low brightness");
@@ -686,6 +690,8 @@ static void scenario_serial() {
   CHECK(credentials["ssid"] == "TestNet");
   CHECK(credentials["password"] == "secretpass");
   checkEq(WiFi.beginCount, 1, "credentials trigger Wi-Fi association");
+  check(!server.started, "Wi-Fi provisioning does not enable insecure HTTP");
+  checkEq(server.handleCalls, 0, "legacy HTTP server is not polled during runtime");
   CHECK(WiFi.lastSsid == "TestNet");
   CHECK(WiFi.lastPassword == "secretpass");
   const std::string saved=prefs.store.kv["wifi"];
@@ -697,6 +703,7 @@ static void scenario_serial() {
   checkEq(WiFi.beginCount,1,"failed credential write does not reconnect");
   coldBoot();
   CHECK(WiFi.lastSsid=="TestNet" && WiFi.lastPassword=="secretpass");
+  check(!server.started, "restart with saved credentials does not enable insecure HTTP");
 }
 
 // Optional: POST the exact bytes the browser UI produces (written by
