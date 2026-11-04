@@ -18,5 +18,5 @@ else
 fi
 g++ -std=gnu++17 -Wall -Wextra -O0 -g -I"$repo/test/host/stubs" -I"$repo/include" -isystem "$json_src" \
   "$repo/test/security/access_gate.cpp" "$repo/test/host/stubs/host_stubs.cpp" -o "$work/access_gate"
-echo 'Host-only access gate (does not test TLS or real networking):'
+echo 'Host-only handler authorization gate (direct dispatch bypasses the disabled listener; does not test TLS or networking):'
 "$work/access_gate"
