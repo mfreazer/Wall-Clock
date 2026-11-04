@@ -85,6 +85,7 @@ static void coldBoot() {
   configurationNeedsRepair=false;
   revisionCounter=0;
   serialOverflow=false;
+  cancelSerialConfig();
   server.routes.clear();
   server.started = false;
   server.handleCalls = 0;
@@ -706,6 +707,98 @@ static void scenario_serial() {
   check(!server.started, "restart with saved credentials does not enable insecure HTTP");
 }
 
+static void scenario_serial_configuration() {
+  prefs.store.kv.clear();
+  coldBoot();
+  auto line = [](const std::string& text) {
+    Serial.out.clear();
+    Serial.in.assign(text.begin(),text.end()); Serial.in.push_back('\n');
+    advance(1);
+    return Serial.out;
+  };
+  auto begin = [&](const std::string& body) {
+    check(line("CONFIG BEGIN " + std::to_string(body.size())).find("CONFIG READY") != std::string::npos,
+          "serial config begins");
+  };
+  auto append = [&](const std::string& body) {
+    for(size_t pos=0;pos<body.size();pos+=80) {
+      check(line("CONFIG CHUNK " + std::to_string(pos) + " " + body.substr(pos,80)).find("CONFIG CHUNK OK") != std::string::npos,
+            "serial config chunk acknowledged");
+    }
+  };
+  const std::string body=withCount(30);
+  const std::string current=line("CONFIG GET");
+  check(current.find("CONFIG JSON ")==0,"serial configuration can be read");
+  JsonDocument readBack;
+  CHECK(!deserializeJson(readBack,current.substr(12)));
+  checkEq(readBack["count"].as<int>(),60,"serial read returns current count");
+  check(line("CONFIG BEGIN 2049").find("CONFIG ERR invalid length") != std::string::npos,"oversized configuration rejected at begin");
+  check(line("CONFIG BEGIN 0").find("CONFIG ERR invalid length") != std::string::npos,"empty configuration rejected at begin");
+  begin(body); append(body);
+  check(line("CONFIG COMMIT").find("CONFIG SAVED") != std::string::npos,"valid serial configuration saved");
+  checkEq(config.count,30,"serial configuration applied");
+  check(!server.started,"serial configuration does not enable web listener");
+  coldBoot();
+  checkEq(config.count,30,"serial configuration survives simulated restart");
+  const auto stored=prefs.store.kv["config"];
+
+  check(line("CONFIG CHUNK 0 x").find("CONFIG ERR not started") != std::string::npos,"chunk without begin rejected");
+  begin(body);
+  check(line("CONFIG CHUNK 1 x").find("CONFIG ERR invalid offset") != std::string::npos,"wrong chunk offset aborts");
+  check(line("CONFIG COMMIT").find("CONFIG ERR not started") != std::string::npos,"aborted transaction cannot commit");
+  begin(body);
+  check(line("CONFIG CHUNK 0 " + body.substr(0,20)).find("CONFIG CHUNK OK") != std::string::npos,"partial chunk accepted");
+  check(line("CONFIG COMMIT").find("CONFIG ERR incomplete") != std::string::npos,"incomplete transfer rejected");
+  CHECK(prefs.store.kv["config"]==stored && config.count==30);
+  begin(body);
+  check(line("CONFIG CHUNK 0 " + body.substr(0,20)).find("CONFIG CHUNK OK") != std::string::npos,"first chunk accepted");
+  check(line("CONFIG CHUNK 0 " + body.substr(0,20)).find("CONFIG ERR invalid offset") != std::string::npos,"duplicate chunk rejected");
+  begin(body);
+  check(line("CONFIG CHUNK 0 \t").find("CONFIG ERR invalid or oversized chunk") != std::string::npos,"control bytes rejected");
+  begin(body);
+  check(line("CONFIG CANCEL").find("CONFIG CANCELED") != std::string::npos,"serial config can be canceled");
+  check(line("CONFIG COMMIT").find("CONFIG ERR not started") != std::string::npos,"canceled transaction cannot commit");
+
+  begin(body); append(body);
+  Preferences::failWrites=true;
+  check(line("CONFIG COMMIT").find("CONFIG ERR persistence") != std::string::npos,"serial write failure reported");
+  Preferences::failWrites=false;
+  CHECK(prefs.store.kv["config"]==stored && config.count==30);
+
+  const std::string larger=withCount(40);
+  begin(larger); append(larger);
+  Adafruit_NeoPixel::failNextAlloc=true;
+  check(line("CONFIG COMMIT").find("CONFIG ERR LED buffer allocation") != std::string::npos,"serial allocation failure reported");
+  CHECK(prefs.store.kv["config"]==stored && config.count==30);
+  Adafruit_NeoPixel::failNextAlloc=false;
+
+  const std::string invalid="{}";
+  begin(invalid); append(invalid);
+  check(line("CONFIG COMMIT").find("CONFIG ERR invalid settings") != std::string::npos,"invalid settings rejected over serial");
+  CHECK(prefs.store.kv["config"]==stored && config.count==30);
+
+  begin(larger); append(larger);
+  hostSetPin(BUTTON_PIN, LOW); advance(100); hostSetPin(BUTTON_PIN, HIGH); advance(100);
+  check(line("CONFIG COMMIT").find("CONFIG ERR settings changed") != std::string::npos,"button change rejects stale serial update");
+  CHECK(config.idle && config.count==30);
+  const auto afterButton=prefs.store.kv["config"];
+  begin(larger);
+  check(line(std::string(161,'x')).find("Serial line too long") != std::string::npos,"oversized line reported");
+  check(line("CONFIG COMMIT").find("CONFIG ERR not started") != std::string::npos,"oversized line aborts transaction");
+  CHECK(prefs.store.kv["config"]==afterButton && config.count==30);
+  begin(larger); append(larger); coldBoot();
+  check(line("CONFIG COMMIT").find("CONFIG ERR not started") != std::string::npos,"restart aborts unfinished serial update");
+  CHECK(prefs.store.kv["config"]==afterButton && config.count==30);
+
+  prefs.store.kv["config"]="corrupt"; coldBoot();
+  CHECK(configurationNeedsRepair);
+  begin(body); append(body);
+  check(line("CONFIG COMMIT").find("CONFIG SAVED") != std::string::npos,"serial save repairs corrupt stored config");
+  CHECK(!configurationNeedsRepair && config.count==30);
+  coldBoot();
+  CHECK(!configurationNeedsRepair && config.count==30);
+}
+
 // Optional: POST the exact bytes the browser UI produces (written by
 // ui_contract_test.mjs). Only runs when a path is supplied.
 static void scenario_ui_payload(const char* path) {
@@ -747,6 +840,7 @@ int main(int argc, char** argv) {
       {"LED output, cadence and bounds", scenario_display},
       {"physical button", scenario_button},
       {"serial provisioning", scenario_serial},
+      {"serial configuration and recovery", scenario_serial_configuration},
   };
 
   printf("firmware_host_harness: %zu scenarios\n", sizeof scenarios / sizeof scenarios[0]);

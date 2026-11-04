@@ -163,7 +163,15 @@ pio device monitor -b 115200
 
 Read the hardware and safety profile in [docs/Implementation.md](docs/Implementation.md) before connecting a strip. The default data pin is GPIO18, and the optional active-low button is GPIO27 to ground.
 
-At the serial prompt send `WIFI <ssid><TAB><password>` followed by Enter (replace `<TAB>` with a literal tab). Credentials persist in NVS. After joining the network, the clock prints its IP every 30 seconds. **The web interface is temporarily disabled**: no HTTP listener is started and settings cannot currently be changed from a browser. Before network time is available, the LEDs remain off. There is no setup access point or cloud dependency beyond network time.
+At the serial prompt send `WIFI <ssid><TAB><password>` followed by Enter (replace `<TAB>` with a literal tab). Credentials persist in NVS. After joining the network, the clock prints its IP every 30 seconds. **The web interface is temporarily disabled**: no HTTP listener is started and settings cannot currently be changed from a browser. On a POSIX computer, settings can be read and updated over USB instead:
+
+```sh
+python3 tools/serial_config.py /dev/ttyUSB0 get > clock-settings.json
+# Edit the JSON, then send the complete document back:
+python3 tools/serial_config.py /dev/ttyUSB0 set clock-settings.json
+```
+
+Use the actual serial device path. The tool does not require third-party Python packages. The clock validates the entire configuration and reports errors without applying invalid or incomplete updates; a concurrent button change rejects a stale update. The serial path is not yet verified on physical hardware. Before network time is available, the LEDs remain off. There is no setup access point or cloud dependency beyond network time.
 
 ## Native tests (no ESP32 needed)
 

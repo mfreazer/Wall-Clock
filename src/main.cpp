@@ -41,6 +41,10 @@ uint32_t buttonChanged=0;
 bool rawButton=false, stableButton=false;
 String serialLine;
 bool serialOverflow=false;
+String serialConfig;
+String serialConfigRevision;
+unsigned serialConfigLength=0;
+bool serialConfigActive=false;
 bool configurationNeedsRepair=false;
 
 void encode(JsonDocument& d,const Config& c) {
@@ -77,6 +81,89 @@ void applyStripConfiguration(const Config& c, std::unique_ptr<Adafruit_NeoPixel>
  strip=std::move(next); strip->setPin(LED_PIN); strip->begin(); strip->clear(); strip->show();
  config=c;
  setenv("TZ",c.timezone.c_str(),1);tzset();
+}
+enum class ConfigUpdate { Ok, Invalid, NoBuffer, StorageFailure };
+ConfigUpdate updateConfiguration(const String& text) {
+ Config candidate;
+ if(!decode(text,candidate)) return ConfigUpdate::Invalid;
+ std::unique_ptr<Adafruit_NeoPixel> next;
+ if(!strip || candidate.count!=config.count) {
+  next=prepareStrip(candidate);
+  if(!next) return ConfigUpdate::NoBuffer;
+ }
+ if(!save(candidate)) return ConfigUpdate::StorageFailure;
+ if(next) applyStripConfiguration(candidate,std::move(next));
+ else { config=candidate; setenv("TZ",config.timezone.c_str(),1); tzset(); }
+ configurationNeedsRepair=false;
+ bumpRevision();
+ return ConfigUpdate::Ok;
+}
+void cancelSerialConfig() {
+ serialConfig=""; serialConfigRevision=""; serialConfigLength=0; serialConfigActive=false;
+}
+bool serialConfigNumber(const String& value,unsigned& number) {
+ if(value.length()==0 || value.length()>4) return false;
+ unsigned n=0;
+ for(unsigned i=0;i<value.length();++i) {
+  const char c=value.c_str()[i]; if(c<'0' || c>'9') return false;
+  n=n*10+static_cast<unsigned>(c-'0');
+ }
+ if(n>2048) return false;
+ number=n; return true;
+}
+// Local-only configuration while the web listener is disabled. Chunks are
+// printable ASCII (JSON can use escapes) so newline framing is unambiguous.
+// A revision captured at BEGIN prevents a button press from being overwritten.
+bool handleSerialConfig(const String& line) {
+ if(line=="CONFIG PING") { Serial.println("CONFIG PONG"); return true; }
+ if(line=="CONFIG GET") {
+  JsonDocument d; encode(d,config); String text; serializeJson(d,text);
+  Serial.print("CONFIG JSON "); Serial.println(text); return true;
+ }
+ if(line.startsWith("CONFIG BEGIN ")) {
+  unsigned length=0; const bool validLength=serialConfigNumber(line.substring(13),length) && length>0;
+  cancelSerialConfig();
+  if(!validLength) { Serial.println("CONFIG ERR invalid length"); return true; }
+  serialConfigLength=length; serialConfigRevision=configRevision(); serialConfigActive=true;
+  Serial.println("CONFIG READY"); return true;
+ }
+ if(line=="CONFIG CANCEL") { cancelSerialConfig(); Serial.println("CONFIG CANCELED"); return true; }
+ if(line.startsWith("CONFIG CHUNK ")) {
+  if(!serialConfigActive) { Serial.println("CONFIG ERR not started"); return true; }
+  const int split=line.indexOf(' ',13);
+  unsigned offset=0;
+  if(split<0 || !serialConfigNumber(line.substring(13,split),offset) || offset!=serialConfig.length()) {
+   cancelSerialConfig(); Serial.println("CONFIG ERR invalid offset"); return true;
+  }
+  String chunk=line.substring(split+1);
+  bool printable=chunk.length()>0;
+  for(unsigned i=0;i<chunk.length();++i) {
+   const unsigned char c=static_cast<unsigned char>(chunk.c_str()[i]);
+   if(c<0x20 || c>0x7e) printable=false;
+  }
+  if(!printable || chunk.length()>serialConfigLength-serialConfig.length() || !serialConfig.concat(chunk.c_str())) {
+   cancelSerialConfig(); Serial.println("CONFIG ERR invalid or oversized chunk"); return true;
+  }
+  Serial.println("CONFIG CHUNK OK"); return true;
+ }
+ if(line=="CONFIG COMMIT") {
+  if(!serialConfigActive) { Serial.println("CONFIG ERR not started"); return true; }
+  if(serialConfig.length()!=serialConfigLength) {
+   cancelSerialConfig(); Serial.println("CONFIG ERR incomplete"); return true;
+  }
+  if(serialConfigRevision!=configRevision()) {
+   cancelSerialConfig(); Serial.println("CONFIG ERR settings changed"); return true;
+  }
+  const ConfigUpdate result=updateConfiguration(serialConfig);
+  cancelSerialConfig();
+  if(result==ConfigUpdate::Ok) Serial.println("CONFIG SAVED");
+  else if(result==ConfigUpdate::Invalid) Serial.println("CONFIG ERR invalid settings");
+  else if(result==ConfigUpdate::NoBuffer) Serial.println("CONFIG ERR LED buffer allocation");
+  else Serial.println("CONFIG ERR persistence");
+  return true;
+ }
+ if(line.startsWith("CONFIG")) { cancelSerialConfig(); Serial.println("CONFIG ERR unknown command"); return true; }
+ return false;
 }
 // Store both credentials in a single NVS value so a failed update cannot mix
 // a new SSID with the old password. Legacy keys are read only for migration.
@@ -121,22 +208,17 @@ void setup() {
   if(server.arg("plain").length()>2048){server.send(413,"text/plain","Too large");return;}
   if(!server.hasHeader("If-Match")){server.send(428,"text/plain","Reload settings before saving");return;}
   if(server.header("If-Match")!=configRevision()){server.send(412,"text/plain","Settings changed; reload before saving");return;}
-  Config candidate;if(!decode(server.arg("plain"),candidate)){server.send(400,"text/plain","Invalid settings: check bounds, colors, brightness, and supported POSIX time zone rule");return;}
-  std::unique_ptr<Adafruit_NeoPixel> next;
-  if(!strip || candidate.count!=config.count) {
-   next=prepareStrip(candidate);
-   if(!next){server.send(503,"text/plain","LED buffer allocation failed");return;}
-  }
-  if(!save(candidate)){server.send(500,"text/plain","Persistence failed");return;}
-  if(next) applyStripConfiguration(candidate,std::move(next));
-  else { config=candidate; setenv("TZ",config.timezone.c_str(),1); tzset(); }
-  configurationNeedsRepair=false;
-  bumpRevision();server.sendHeader("ETag",configRevision());server.send(200,"application/json","{\"saved\":true}");
+  const ConfigUpdate result=updateConfiguration(server.arg("plain"));
+  if(result==ConfigUpdate::Invalid){server.send(400,"text/plain","Invalid settings: check bounds, colors, brightness, and supported POSIX time zone rule");return;}
+  if(result==ConfigUpdate::NoBuffer){server.send(503,"text/plain","LED buffer allocation failed");return;}
+  if(result==ConfigUpdate::StorageFailure){server.send(500,"text/plain","Persistence failed");return;}
+  server.sendHeader("ETag",configRevision());server.send(200,"application/json","{\"saved\":true}");
  });
  const char* headers[]={"Content-Type","If-Match"};server.collectHeaders(headers,2);
  // Fail closed while the authenticated HTTPS interface is under development.
  // The unauthenticated HTTP handlers must not be reachable on the network.
  Serial.println("Web configuration disabled pending secure HTTPS setup.");
+ Serial.println("USB settings: CONFIG GET, BEGIN, CHUNK, COMMIT or CANCEL (prefix each with CONFIG).");
  Serial.println("Provision: WIFI <ssid><TAB><password> then Enter. Button toggles idle light.");previousUs=esp_timer_get_time();
 }
 void loop() {
@@ -144,7 +226,11 @@ void loop() {
  // No HTTP listener is started; do not poll the legacy web server.
  while(Serial.available()) {
   char ch=Serial.read();if(ch=='\n'){
-   if(!serialOverflow && serialLine.startsWith("WIFI ")){int split=serialLine.indexOf('\t',5);if(split>5){String ssid=serialLine.substring(5,split),pass=serialLine.substring(split+1);
+   const bool configCommand=!serialOverflow && handleSerialConfig(serialLine);
+   if(!serialOverflow && !configCommand && serialConfigActive) {
+    cancelSerialConfig(); Serial.println("CONFIG ERR interrupted");
+   }
+   if(!serialOverflow && !configCommand && serialLine.startsWith("WIFI ")){int split=serialLine.indexOf('\t',5);if(split>5){String ssid=serialLine.substring(5,split),pass=serialLine.substring(split+1);
     JsonDocument d;d["ssid"]=ssid;d["password"]=pass;String text;serializeJson(d,text);String checkedSsid,checkedPass;
     if(!wifiCredentials(text,checkedSsid,checkedPass)) Serial.println("Invalid Wi-Fi credentials (SSID 1-32 bytes, password empty or 8-63 bytes)");
     else if(prefs.putString("wifi",text)!=text.length()) Serial.println("Wi-Fi credential persistence failed");
@@ -152,7 +238,7 @@ void loop() {
    }}
    if(serialOverflow) Serial.println("Serial line too long; discarded");
    serialLine="";serialOverflow=false;
-  }else if(ch!='\r' && !serialOverflow){if(serialLine.length()<160)serialLine+=ch;else {serialLine="";serialOverflow=true;}}
+  }else if(ch!='\r' && !serialOverflow){if(serialLine.length()<160)serialLine+=ch;else {serialLine="";serialOverflow=true;cancelSerialConfig();}}
  }
  bool pressed=digitalRead(BUTTON_PIN)==LOW;
  if(pressed!=rawButton){rawButton=pressed;buttonChanged=millis();}

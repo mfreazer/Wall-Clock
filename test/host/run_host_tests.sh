@@ -277,6 +277,15 @@ echo
 echo "== browser UI contract =="
 run_ui_contract
 echo
+echo "== serial configuration tool =="
+if ! command -v python3 >/dev/null 2>&1; then
+  skip "serial configuration tool" "python3 not installed"
+elif python3 "$ROOT/test/security/serial_config_test.py" > "$WORK/serial-config.out" 2>&1; then
+  pass "serial configuration tool"
+else
+  fail "serial configuration tool" "$(show_log "$WORK/serial-config.out" 25)"
+fi
+echo
 echo "== firmware integration =="
 run_firmware_harness
 echo

@@ -72,7 +72,7 @@ Multiple statuses may apply. No requirement is claimed system-accepted. No line/
 | WC-SYS-054 | F encode/decode/API; U five colors | R `collisions` tests selected rendered colors only | Partial: H tests malformed RGB/API and UI contract; target workflow untested |
 | WC-SYS-055 | F API/button; U idle checkbox | R `collisions` tests core idle only | Partial: H tests stubbed button/API and UI contract; target interfaces untested |
 | WC-SYS-056 | F decode + save-before-apply; E `valid` | R `validation`; H `scenario_rejections` | Partial: host rejection and state invariance checked; representative target newlib cases pass in emulation, not exhaustive or physical hardware |
-| WC-SYS-057 | F `save`, boot `decode`, NVS | H `scenario_persistence`, `scenario_rejections` | Partial: simulated storage, reboot and write failure tested; real power cycles untested |
+| WC-SYS-057 | F `save`, boot `decode`, NVS; USB serial configuration | H `scenario_persistence`, `scenario_rejections`, `scenario_serial_configuration` | Partial: serial save/recovery, simulated storage, reboot and write failure tested; real power cycles untested |
 | WC-SYS-058 | F legacy HTTP handlers without authentication; listener disabled | H `scenario_boot`, `scenario_serial` | Blocked: protected standalone web access and USB provisioning not yet implemented; listener not started or polled in host tests, physical network unverified |
 | WC-SYS-060 | F `loop` 20ms frame target and `strip.show` | R `modulation` tests frame values only | Partial: physical refresh timing untested |
 | WC-SYS-061 | F `esp_timer_get_time` vs `time`; E oscillator | R `modulation` | Partial: core independence tested, firmware clock correction untested |

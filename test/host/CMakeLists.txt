@@ -61,6 +61,15 @@ elseif(EXISTS "${WALLCLOCK_ROOT}/src/main.cpp")
   message(STATUS "firmware_host_harness skipped: set WALLCLOCK_ARDUINOJSON_DIR to build it")
 endif()
 
+# --- local serial configuration tool ---------------------------------------
+find_program(WALLCLOCK_PYTHON NAMES python3)
+if(UNIX AND WALLCLOCK_PYTHON AND EXISTS "${WALLCLOCK_ROOT}/test/security/serial_config_test.py")
+  add_test(NAME serial_config_tool
+           COMMAND "${WALLCLOCK_PYTHON}" "${WALLCLOCK_ROOT}/test/security/serial_config_test.py")
+elseif(WALLCLOCK_REQUIRE_FIRMWARE_TESTS)
+  message(FATAL_ERROR "Serial configuration tests require Python 3 and POSIX pseudo-terminals")
+endif()
+
 # --- browser UI contract ---------------------------------------------------
 find_program(WALLCLOCK_NODE NAMES node nodejs)
 if(WALLCLOCK_NODE AND EXISTS "${WALLCLOCK_ROOT}/include/web_ui.h")

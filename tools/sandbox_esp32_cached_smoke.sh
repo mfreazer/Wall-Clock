@@ -2,18 +2,21 @@
 # Run the Git-stored, test-only ESP32 image; do not build or flash it.
 set -euo pipefail
 if [[ ${1:-} == --help ]]; then
-  echo "Usage: $0 [--persistence] [--keep]  (run cached-image emulator test)"
+  echo "Usage: $0 [--persistence | --serial-config] [--keep]  (run cached-image emulator test)"
   exit 0
 fi
 keep=0
 persistence=0
+serial_config=0
 for arg in "$@"; do
   case "$arg" in
     --keep) keep=1 ;;
     --persistence) persistence=1 ;;
+    --serial-config) serial_config=1 ;;
     *) echo "Unknown argument: $arg" >&2; exit 2 ;;
   esac
 done
+if (( persistence && serial_config )); then echo 'Choose only one test mode' >&2; exit 2; fi
 for cmd in node npm python3 sha512sum tar unshare mount setpriv timeout; do
   command -v "$cmd" >/dev/null || { echo "Missing required command: $cmd" >&2; exit 1; }
 done
@@ -45,6 +48,8 @@ printf '%s\n' 'Fetching SHA-512-pinned esp32-emu 1.2.0 from npm (no compiler dow
 tar --no-same-owner --no-same-permissions -xzf "$work/emu/esp32-emu-1.2.0.tgz" -C "$work/emu"
 if (( persistence )); then
   cp "$repo/test/target/persistence_emulator.mjs" "$work/emu/run.mjs"
+elif (( serial_config )); then
+  cp "$repo/test/security/serial_config_emulator.mjs" "$work/emu/run.mjs"
 else
   cp "$repo/tools/sandbox_esp32_smoke.mjs" "$work/emu/run.mjs"
 fi
@@ -62,7 +67,7 @@ if timeout 100 unshare -Urnm --fork bash -euc '
   /usr/sbin/chroot "$root" /usr/bin/setpriv --bounding-set=-all --inh-caps=-all --ambient-caps=-all --no-new-privs \
     /usr/bin/env -i HOME=/home PATH=/usr/bin:/bin "$node" /emu/run.mjs
 ' bash "$work" "$node" >"$work/emulator.log" 2>&1; then
-  grep -E 'SMOKE TEST PASSED|Provision: WIFI|Invalid Wi-Fi credentials|PERSISTENCE (PHASE|TEST) PASSED' "$work/emulator.log"
+  grep -E 'SMOKE TEST PASSED|Provision: WIFI|Invalid Wi-Fi credentials|PERSISTENCE (PHASE|TEST) PASSED|SERIAL CONFIG (PHASE|TEST) PASSED' "$work/emulator.log"
 else
   echo 'Emulator smoke test failed; final diagnostics:' >&2
   tail -80 "$work/emulator.log" >&2
