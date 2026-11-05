@@ -2,8 +2,8 @@
 # Build and execute a dedicated ESP32 password-verifier probe. Test-only, not flashing.
 set -euo pipefail
 if [[ ${1:-} == --help || $# -lt 1 || $# -gt 2 || ( $# == 2 && $2 != --keep ) ]]; then
-  echo "Usage: $0 RETAINED_BUILD [--keep]"
-  echo 'First run ./tools/sandbox_esp32_build.sh --emulate --keep.'
+  echo "Usage: $0 <retained-build-directory> [--keep]"
+  echo 'First run ./tools/sandbox_esp32_build.sh --emulate --keep and pass its printed scratch directory.'
   [[ ${1:-} == --help ]] && exit 0 || exit 2
 fi
 for cmd in python3 sha256sum sha512sum tar unshare mount setpriv timeout node readelf; do

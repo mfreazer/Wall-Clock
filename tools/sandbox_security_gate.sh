@@ -7,8 +7,8 @@ repo=$(cd "$(dirname "$0")/.." && pwd)
 work=$(mktemp -d)
 trap 'rm -rf -- "$work"' EXIT
 if [[ -n ${ARDUINOJSON_SRC:-} ]]; then
-  if [[ -f "$ARDUINOJSON_SRC/ArduinoJson.h" ]]; then json_src=$ARDUINOJSON_SRC
-  else json_src=$ARDUINOJSON_SRC/src; fi
+  if [[ -f "$ARDUINOJSON_SRC/src/ArduinoJson.h" ]]; then json_src=$ARDUINOJSON_SRC/src
+  else json_src=$ARDUINOJSON_SRC; fi
   [[ -f "$json_src/ArduinoJson.h" ]] || { echo 'ARDUINOJSON_SRC does not contain ArduinoJson.h' >&2; exit 1; }
   echo 'Using caller-supplied ArduinoJson; its identity is not verified.'
 else

@@ -2,8 +2,8 @@
 # Compile/link-only HTTPS server feasibility probe. Test-only: never flash.
 set -euo pipefail
 if [[ ${1:-} == --help || $# -lt 1 ]]; then
-  echo "Usage: $0 RETAINED_BUILD [--with-clock] [--keep]"
-  echo 'First run ./tools/sandbox_esp32_build.sh --keep.'
+  echo "Usage: $0 <retained-build-directory> [--with-clock] [--keep]"
+  echo 'First run ./tools/sandbox_esp32_build.sh --keep and pass its printed scratch directory.'
   [[ ${1:-} == --help ]] && exit 0 || exit 2
 fi
 bundle_arg=$1
