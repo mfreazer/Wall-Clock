@@ -178,7 +178,7 @@ resolve_arduinojson() {
     if [ -d "$ARDUINOJSON_SRC/src" ]; then echo "$ARDUINOJSON_SRC/src"; else echo "$ARDUINOJSON_SRC"; fi
     return 0
   fi
-  for candidate in "$ROOT/third_party/ArduinoJson/src" "$ROOT/.deps/ArduinoJson/src"; do
+  for candidate in "$ROOT/third_party/ArduinoJson/src" "$ROOT/.deps/ArduinoJson/src" "$WORK/ArduinoJson/src"; do
     [ -d "$candidate" ] && { echo "$candidate"; return 0; }
   done
   if command -v git >/dev/null 2>&1 && command -v "$CXX" >/dev/null 2>&1; then
@@ -230,6 +230,43 @@ run_firmware_harness() {
   fi
 }
 
+# Independent QA protocol probe and real client-to-firmware PTY seam.
+run_serial_integration() {
+  local json_src
+  if ! command -v python3 >/dev/null 2>&1; then
+    skip "serial firmware integration" "python3 unavailable"
+    return
+  fi
+  if ! json_src="$(resolve_arduinojson)"; then
+    skip "serial firmware integration" "ArduinoJson $ARDUINOJSON_TAG unavailable"
+    return
+  fi
+  local source name
+  for name in serial_protocol_probe serial_pty_bridge; do
+    source="$ROOT/test/host/$name.cpp"
+    if [ ! -f "$source" ]; then
+      skip "$name" "source missing"
+      return
+    fi
+    if ! "$CXX" "${FW_FLAGS[@]}" "${SAN_FLAGS[@]}" -DARDUINOJSON_ENABLE_ARDUINO_STRING=1 \
+         -I"$ROOT/test/host/stubs" -I"$ROOT/include" -isystem "$json_src" \
+         "$source" "$ROOT/test/host/stubs/host_stubs.cpp" -o "$WORK/$name" > "$WORK/$name.log" 2>&1; then
+      fail "$name: compile" "$(show_log "$WORK/$name.log" 25)"
+      return
+    fi
+  done
+  if "$WORK/serial_protocol_probe" > "$WORK/serial-probe.out" 2>&1; then
+    pass "independent serial protocol probe"
+  else
+    fail "independent serial protocol probe" "$(show_log "$WORK/serial-probe.out" 30)"
+  fi
+  if python3 "$ROOT/test/host/serial_e2e_test.py" --bridge "$WORK/serial_pty_bridge" --root "$ROOT" > "$WORK/serial-e2e.out" 2>&1; then
+    pass "serial client to firmware PTY"
+  else
+    fail "serial client to firmware PTY" "$(show_log "$WORK/serial-e2e.out" 35)"
+  fi
+}
+
 # ---------------------------------------------------------------------------
 # 4. Browser UI contract test
 # ---------------------------------------------------------------------------
@@ -277,8 +314,20 @@ echo
 echo "== browser UI contract =="
 run_ui_contract
 echo
+echo "== serial configuration tool =="
+if ! command -v python3 >/dev/null 2>&1; then
+  skip "serial configuration tool" "python3 not installed"
+elif python3 "$ROOT/test/security/serial_config_test.py" > "$WORK/serial-config.out" 2>&1; then
+  pass "serial configuration tool"
+else
+  fail "serial configuration tool" "$(show_log "$WORK/serial-config.out" 25)"
+fi
+echo
 echo "== firmware integration =="
 run_firmware_harness
+echo
+echo "== serial firmware integration =="
+run_serial_integration
 echo
 if [ -d "$ROOT/sandbox-artifacts/esp32" ]; then
   echo "== cached emulator snapshot guard =="

@@ -7,7 +7,7 @@ The clock represents hours, minutes, and seconds using colored light. Hours and 
 Project status
 
 Phase: Development implementation
-Implementation: Portable C++ clock engine, ESP32 Arduino firmware, local configuration UI, and native engine tests. Hardware acceptance is pending.
+Implementation: Portable C++ clock engine, ESP32 Arduino firmware, local configuration UI, and native engine tests. The unauthenticated web listener is temporarily disabled while secure access is developed; browser configuration is unavailable. Hardware acceptance is pending.
 
 The system requirements are documented in [docs/SyRS.md](docs/SyRS.md). Provisional development decisions, defaults, limitations and verification status are recorded in [docs/Implementation.md](docs/Implementation.md); they are not silently promoted to approved requirements.
 
@@ -163,7 +163,15 @@ pio device monitor -b 115200
 
 Read the hardware and safety profile in [docs/Implementation.md](docs/Implementation.md) before connecting a strip. The default data pin is GPIO18, and the optional active-low button is GPIO27 to ground.
 
-At the serial prompt send `WIFI <ssid><TAB><password>` followed by Enter (replace `<TAB>` with a literal tab). Credentials persist in NVS. After joining the network, the clock prints its IP every 30 seconds. Open `http://<printed-ip>/` from the same trusted LAN to configure the ring. Before network time is available, the LEDs remain off. There is no setup access point or cloud dependency beyond network time.
+At the serial prompt send `WIFI <ssid><TAB><password>` followed by Enter (replace `<TAB>` with a literal tab). Credentials persist in NVS. After joining the network, the clock prints its IP every 30 seconds. **The web interface is temporarily disabled**: no HTTP listener is started and settings cannot currently be changed from a browser. On a POSIX computer, settings can be read and updated over USB instead:
+
+```sh
+python3 tools/serial_config.py /dev/ttyUSB0 get > clock-settings.json
+# Edit the JSON, then send the complete document back:
+python3 tools/serial_config.py /dev/ttyUSB0 set clock-settings.json
+```
+
+Use the actual serial device path. The tool does not require third-party Python packages. The clock validates the entire configuration and reports errors without applying invalid or incomplete updates; a button change during the transfer rejects the update. If settings changed after you saved the JSON file but before the transfer began, read and review them again to avoid overwriting those changes. The serial path is not yet verified on physical hardware. Before network time is available, the LEDs remain off. There is no setup access point or cloud dependency beyond network time.
 
 ## Native tests (no ESP32 needed)
 
@@ -189,4 +197,4 @@ The basic CMake command above skips the firmware harness unless an ArduinoJson p
 
 Source layout: `include/clock_engine.h` contains hardware-independent geometry, modulation, validation and rendering; `src/main.cpp` handles SNTP, NVS, HTTP, controls and NeoPixel output; `include/web_ui.h` is the self-contained local UI. No credentials should be committed.
 
-Review findings and outstanding risks are recorded in [docs/Review.md](docs/Review.md).
+Review findings and outstanding risks are recorded in [docs/Review.md](docs/Review.md). The open access-policy decisions and release/hardware verification plan are in [docs/Release-Readiness.md](docs/Release-Readiness.md).

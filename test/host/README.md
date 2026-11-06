@@ -11,7 +11,7 @@ test/host/run_host_tests.sh              # skips what is absent, exits 0/1
 test/host/run_host_tests.sh --require-firmware   # required sandbox gate
 ```
 
-A C++17 compiler is required. Node.js adds the UI contract test; when the cached snapshot is present, its guard tests also require Python 3 and Git.
+A C++17 compiler is required. Node.js adds the UI contract test. The serial client/firmware integration requires Python 3 and POSIX pseudo-terminals; when the cached snapshot is present, its guard tests also require Python 3 and Git.
 ASan/UBSan are used automatically when the toolchain supports them
 (`--no-sanitizers` to disable, `--keep` to keep build artifacts).
 
@@ -30,9 +30,11 @@ With `WALLCLOCK_REQUIRE_FIRMWARE_TESTS=ON`, CMake fails configuration if firmwar
 
 | File | Purpose |
 |---|---|
-| `run_host_tests.sh` | Runs all four groups, prints one PASS/FAIL/SKIP per check, aggregates the result |
+| `run_host_tests.sh` | Runs native, UI, firmware, serial integration and snapshot checks; aggregates PASS/FAIL/SKIP results |
 | `engine_properties.cpp` | Property tests for `include/clock_engine.h`: bounded indices for every supported geometry, monotone dial mapping, distinct minute positions, brightness bounds, half-period complement, phase continuity, saturating blending, validation ranges |
 | `firmware_harness.cpp` | Compiles `src/main.cpp` unmodified and drives it: HTTP routes and conditional writes, config round-trip, rejection cases, NVS/LED allocation failures, cold boot, invalid time-zone recovery, SNTP callback, LED cadence and pixel semantics, index bounds, button debounce, serial provisioning |
+| `serial_protocol_probe.cpp` | QA's independent host probe for serial aborts, time-zone application, failure invariants and the disabled listener |
+| `serial_pty_bridge.cpp`, `serial_e2e_test.py` | Connect the real firmware serial stub to a PTY and exercise the shipped Python client against it, including valid, invalid and time-zone updates |
 | `ui_contract_test.mjs` | Executes the real HTML/JS from `include/web_ui.h` under a DOM shim, checks it renders what `/api/config` returns and submits exactly the 13 members `decode()` requires, then hands that body to the firmware harness |
 | `stubs/` | Host shims for Arduino, `WebServer`, `Preferences`, `WiFi`, `esp_timer` and `Adafruit_NeoPixel`. Test instrumentation (captured frames, out-of-range writes, forced NVS failures, virtual clock) lives here |
 | `CMakeLists.txt` | Optional CTest integration, additive and self-disabling when inputs are missing |

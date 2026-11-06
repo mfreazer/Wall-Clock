@@ -45,6 +45,7 @@ class WebServer {
   std::vector<Route> routes;
   std::vector<std::string> collectedHeaders;
   bool started = false;
+  int handleCalls = 0;
 
   HostHttpRequest req;
   HostHttpResponse res;
@@ -61,7 +62,7 @@ class WebServer {
   }
 
   void begin() { started = true; }
-  void handleClient() {}
+  void handleClient() { ++handleCalls; }
 
   String arg(const char* name) const {
     return (name && std::string(name) == "plain") ? String(req.body) : String();
